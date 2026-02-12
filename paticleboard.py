@@ -25,12 +25,8 @@ def calc_TS(t_before, t_after):
 st.title("🧪 Particleboard Bending Test (Single Sample)")
 st.subheader("MOR • MOE (from Excel) • Thickness Swelling • Load–Deflection Graph")
 
-# ---------------------------------------------------------
-# MOR Section
-# ---------------------------------------------------------
-
 st.write("---")
-st.header("1) คำนวณ MOR (จากค่าที่กรอก)")
+st.header("1) กรอกข้อมูล MOR (1 ตัวอย่าง)")
 
 L = st.number_input("ระยะห่างแท่นรองรับ L (mm)", 0.0)
 b = st.number_input("ความกว้าง b (mm)", 0.0)
@@ -44,7 +40,7 @@ if st.button("คำนวณ MOR"):
     st.success(f"MOR = {mor:.2f} MPa")
 
 # ---------------------------------------------------------
-# Excel Upload for MOE + Graph
+# Excel Template for Load–Deflection
 # ---------------------------------------------------------
 
 st.write("---")
@@ -79,7 +75,7 @@ if uploaded:
     # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
-    # ymax สำหรับคำนวณ MOE (ใช้ deflection สูงสุด)
+    # หา ymax จาก deflection สูงสุด
     ymax = df["Deflection (mm)"].max()
 
     # คำนวณ MOE
@@ -90,25 +86,13 @@ if uploaded:
     else:
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
 
-    # ---------------------------------------------------------
-    # Plot Graph (Line Chart แบบ Excel)
-    # ---------------------------------------------------------
-
+    # Plot graph
     fig, ax = plt.subplots()
-
-    ax.plot(
-        df["Deflection (mm)"],
-        df["Load (N)"],
-        color="red",
-        linewidth=2,
-        label="Load–Deflection Curve"
-    )
-
+    ax.plot(df["Deflection (mm)"], df["Load (N)"], marker="o")
     ax.set_xlabel("Deflection (mm)")
     ax.set_ylabel("Load (N)")
     ax.set_title("Load–Deflection Curve")
     ax.grid(True)
-    ax.legend()
 
     st.pyplot(fig)
 
