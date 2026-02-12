@@ -89,8 +89,16 @@ if uploaded:
     # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
-    # ผู้ใช้กรอก Fmax สำหรับ MOE
-    Fmax_kg_excel = st.number_input("Fmax (kg) สำหรับคำนวณ MOE", 0.0)
+    # ---------------------------------------------------------
+    # ดึง Fmax อัตโนมัติจาก Excel
+    # ---------------------------------------------------------
+    auto_Fmax_kg = df["Load (kg)"].max()
+
+    # ให้ผู้ใช้แก้ไขค่าได้
+    Fmax_kg_excel = st.number_input(
+        "Fmax (kg) สำหรับคำนวณ MOE (ดึงจาก Excel อัตโนมัติ แก้ไขได้)",
+        value=float(auto_Fmax_kg)
+    )
     Fmax_N_excel = Fmax_kg_excel * 9.80665
 
     # หา ymax จาก deflection สูงสุด
