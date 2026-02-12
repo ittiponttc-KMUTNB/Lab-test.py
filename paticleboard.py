@@ -86,16 +86,25 @@ if uploaded:
     st.write("ข้อมูลที่อ่านได้:")
     st.dataframe(df)
 
+    # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
+
+    # ผู้ใช้กรอก Fmax สำหรับ MOE
+    Fmax_kg_excel = st.number_input("Fmax (kg) สำหรับคำนวณ MOE", 0.0)
+    Fmax_N_excel = Fmax_kg_excel * 9.80665
+
+    # หา ymax จาก deflection สูงสุด
     ymax = df["Deflection (mm)"].max()
 
-    moe = calc_MOE_from_excel(Fmax_N, ymax, L, b, t)
+    # คำนวณ MOE
+    moe = calc_MOE_from_excel(Fmax_N_excel, ymax, L, b, t)
 
     if moe is None:
         st.error("ไม่สามารถคำนวณ MOE ได้ (ymax หรือค่าบางตัวเป็นศูนย์)")
     else:
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
 
+    # Plot graph
     fig, ax = plt.subplots()
     ax.plot(df["Deflection (mm)"], df["Load (N)"], marker="o")
     ax.set_xlabel("Deflection (mm)")
@@ -104,6 +113,7 @@ if uploaded:
     ax.grid(True)
 
     st.pyplot(fig)
+
 
 # ---------------------------------------------------------
 # Thickness Swelling
