@@ -80,7 +80,7 @@ if uploaded:
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
     # ---------------------------------------------------------
-    # จุดสำคัญที่แก้: ใช้ Deflection สูงสุดแทน Load สูงสุด
+    # ใช้ Deflection สูงสุดเป็นเกณฑ์ตัดช่วงขึ้น
     # ---------------------------------------------------------
     idx_peak = df["Deflection (mm)"].idxmax()
     df_up = df.iloc[:idx_peak+1]
@@ -97,28 +97,18 @@ if uploaded:
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
 
     # ---------------------------------------------------------
-    # Plot Graph (Point-to-Point)
+    # Plot Graph (Red Line Only)
     # ---------------------------------------------------------
 
     fig, ax = plt.subplots()
 
-    # เส้นสีแดง: ช่วงขึ้นจนถึง deflection สูงสุด
     ax.plot(
         df_up["Deflection (mm)"],
         df_up["Load (N)"],
         color="red",
         linewidth=2,
         marker="o",
-        label="Ascending branch"
-    )
-
-    # จุดข้อมูลทั้งหมด (สีน้ำเงิน)
-    ax.scatter(
-        df["Deflection (mm)"],
-        df["Load (N)"],
-        color="blue",
-        s=20,
-        label="All data"
+        label="Load–Deflection (ascending)"
     )
 
     ax.set_xlabel("Deflection (mm)")
