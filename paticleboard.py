@@ -326,3 +326,18 @@ if st.button("📄 Export Word Report"):
         )
     except Exception as e:
         st.error(f"⚠️ ไม่สามารถสร้าง Word report ได้: {e}")
+        # ---------------------------------------------------------
+# Footer Credit
+# ---------------------------------------------------------
+
+st.write("---")
+st.markdown(
+    """
+    <div style='text-align: center; font-size: 16px; padding-top: 10px;'>
+        <b>พัฒนาโดย:</b> รศ.ดร.อิทธิพล มีผล<br>
+        ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ (มจพ.)
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
