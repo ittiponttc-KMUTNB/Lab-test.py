@@ -70,22 +70,22 @@ for i in range(num_samples):
     st.subheader(f"ตัวอย่างที่ {i+1}")
 
     L = st.number_input(
-        f"L (mm) – ตัวอย่าง {i+1}",
+        f"ระยะ Support, L (mm) – ตัวอย่าง {i+1}",
         value=st.session_state.get(f"L_{i}", 0.0),
         key=f"L_{i}"
     )
     b = st.number_input(
-        f"b (mm) – ตัวอย่าง {i+1}",
+        f"ความกว้างชิ้นตัวอย่าง, b (mm) – ตัวอย่าง {i+1}",
         value=st.session_state.get(f"b_{i}", 0.0),
         key=f"b_{i}"
     )
     t = st.number_input(
-        f"t (mm) – ตัวอย่าง {i+1}",
+        f"ความหนาชิ้นตัวอย่าง, t (mm) – ตัวอย่าง {i+1}",
         value=st.session_state.get(f"t_{i}", 0.0),
         key=f"t_{i}"
     )
     Fmax_kg = st.number_input(
-        f"Fmax (kg) – ตัวอย่าง {i+1}",
+        f"แรงกดสูงสุด, Fmax (kg) – ตัวอย่าง {i+1}",
         value=st.session_state.get(f"Fmax_{i}", 0.0),
         key=f"Fmax_{i}"
     )
