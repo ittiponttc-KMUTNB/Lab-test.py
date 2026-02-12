@@ -25,8 +25,12 @@ def calc_TS(t_before, t_after):
 st.title("🧪 Particleboard Bending Test (Single Sample)")
 st.subheader("MOR • MOE (from Excel) • Thickness Swelling • Load–Deflection Graph")
 
+# ---------------------------------------------------------
+# MOR Section
+# ---------------------------------------------------------
+
 st.write("---")
-st.header("1) กรอกข้อมูล MOR (1 ตัวอย่าง)")
+st.header("1) คำนวณ MOR (จากค่าที่กรอก)")
 
 L = st.number_input("ระยะห่างแท่นรองรับ L (mm)", 0.0)
 b = st.number_input("ความกว้าง b (mm)", 0.0)
@@ -40,7 +44,7 @@ if st.button("คำนวณ MOR"):
     st.success(f"MOR = {mor:.2f} MPa")
 
 # ---------------------------------------------------------
-# Excel Template for Load–Deflection
+# Excel Upload for MOE + Graph
 # ---------------------------------------------------------
 
 st.write("---")
@@ -75,8 +79,14 @@ if uploaded:
     # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
-    # หา ymax จาก deflection สูงสุด
-    ymax = df["Deflection (mm)"].max()
+    # หา index ของจุดที่ Load สูงสุด (peak)
+    idx_peak = df["Load (N)"].idxmax()
+
+    # ใช้เฉพาะข้อมูลตั้งแต่จุดแรกจนถึง peak
+    df_up = df.iloc[:idx_peak+1]
+
+    # หา ymax จาก deflection สูงสุดในช่วงขึ้น
+    ymax = df_up["Deflection (mm)"].max()
 
     # คำนวณ MOE
     moe = calc_MOE_from_excel(Fmax_N, ymax, L, b, t)
@@ -86,13 +96,36 @@ if uploaded:
     else:
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
 
-    # Plot graph
+    # ---------------------------------------------------------
+    # Plot Graph (Point-to-Point)
+    # ---------------------------------------------------------
+
     fig, ax = plt.subplots()
-    ax.plot(df["Deflection (mm)"], df["Load (N)"], marker="o")
+
+    # เส้นสีแดง: ช่วงขึ้นจนถึง peak
+    ax.plot(
+        df_up["Deflection (mm)"],
+        df_up["Load (N)"],
+        color="red",
+        linewidth=2,
+        marker="o",
+        label="Ascending branch"
+    )
+
+    # จุดข้อมูลทั้งหมด (สีน้ำเงิน)
+    ax.scatter(
+        df["Deflection (mm)"],
+        df["Load (N)"],
+        color="blue",
+        s=20,
+        label="All data"
+    )
+
     ax.set_xlabel("Deflection (mm)")
     ax.set_ylabel("Load (N)")
     ax.set_title("Load–Deflection Curve")
     ax.grid(True)
+    ax.legend()
 
     st.pyplot(fig)
 
