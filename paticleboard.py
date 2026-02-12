@@ -79,13 +79,13 @@ if uploaded:
     # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
-    # หา index ของจุดที่ Load สูงสุด (peak)
-    idx_peak = df["Load (N)"].idxmax()
-
-    # ใช้เฉพาะข้อมูลตั้งแต่จุดแรกจนถึง peak
+    # ---------------------------------------------------------
+    # จุดสำคัญที่แก้: ใช้ Deflection สูงสุดแทน Load สูงสุด
+    # ---------------------------------------------------------
+    idx_peak = df["Deflection (mm)"].idxmax()
     df_up = df.iloc[:idx_peak+1]
 
-    # หา ymax จาก deflection สูงสุดในช่วงขึ้น
+    # ymax สำหรับคำนวณ MOE
     ymax = df_up["Deflection (mm)"].max()
 
     # คำนวณ MOE
@@ -102,7 +102,7 @@ if uploaded:
 
     fig, ax = plt.subplots()
 
-    # เส้นสีแดง: ช่วงขึ้นจนถึง peak
+    # เส้นสีแดง: ช่วงขึ้นจนถึง deflection สูงสุด
     ax.plot(
         df_up["Deflection (mm)"],
         df_up["Load (N)"],
