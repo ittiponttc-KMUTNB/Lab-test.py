@@ -12,18 +12,20 @@ def calc_MOR(Fmax_N, L, b, t):
 
 def calc_MOE_from_excel(Fmax_N, ymax, L, b, t):
     if ymax == 0 or b == 0 or t == 0:
-        return None
+        raise ZeroDivisionError
     return (Fmax_N * L**3) / (4 * b * t**3 * ymax)
 
-def calc_TS(t_before, t_after):
-    return ((t_after - t_before) / t_before) * 100
+def calc_TS(avg_before, avg_after):
+    if avg_before == 0:
+        raise ZeroDivisionError
+    return ((avg_after - avg_before) / avg_before) * 100
 
 # ---------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------
 
-st.title("🧪 Particleboard Bending Test (Single Sample)")
-st.subheader("MOR • MOE (from Excel) • Thickness Swelling • Load–Deflection Graph")
+st.title("🧪 Particleboard Bending Test")
+st.subheader("MOR • MOE • Thickness Swelling • Load–Deflection Graph")
 
 # ---------------------------------------------------------
 # MOR MULTI-SAMPLE
@@ -47,12 +49,15 @@ for i in range(num_samples):
     sample_inputs.append((L, b, t, Fmax_kg))
 
 if st.button("คำนวณ MOR ทั้งหมด"):
-    results = []
     for i, (L, b, t, Fmax_kg) in enumerate(sample_inputs):
-        Fmax_N = Fmax_kg * 9.80665
-        mor = calc_MOR(Fmax_N, L, b, t)
-        results.append(mor)
-        st.success(f"MOR ตัวอย่างที่ {i+1} = {mor:.2f} MPa")
+        try:
+            Fmax_N = Fmax_kg * 9.80665
+            mor = calc_MOR(Fmax_N, L, b, t)
+            st.success(f"MOR ตัวอย่างที่ {i+1} = {mor:.2f} MPa")
+        except ZeroDivisionError:
+            st.error(f"❌ ตัวอย่างที่ {i+1}: L, b, t ต้องไม่เป็นศูนย์")
+        except Exception as e:
+            st.error(f"⚠️ ตัวอย่างที่ {i+1}: เกิดข้อผิดพลาด {e}")
 
 # ---------------------------------------------------------
 # Excel Template for Load–Deflection
@@ -86,33 +91,28 @@ if uploaded:
     st.write("ข้อมูลที่อ่านได้:")
     st.dataframe(df)
 
-    # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
-    # ---------------------------------------------------------
     # ดึง Fmax อัตโนมัติจาก Excel
-    # ---------------------------------------------------------
     auto_Fmax_kg = df["Load (kg)"].max()
 
-    # ให้ผู้ใช้แก้ไขค่าได้
+    # ให้ผู้ใช้แก้ไขได้
     Fmax_kg_excel = st.number_input(
         "Fmax (kg) สำหรับคำนวณ MOE (ดึงจาก Excel อัตโนมัติ แก้ไขได้)",
         value=float(auto_Fmax_kg)
     )
     Fmax_N_excel = Fmax_kg_excel * 9.80665
 
-    # หา ymax จาก deflection สูงสุด
     ymax = df["Deflection (mm)"].max()
 
-    # คำนวณ MOE
-    moe = calc_MOE_from_excel(Fmax_N_excel, ymax, L, b, t)
-
-    if moe is None:
-        st.error("ไม่สามารถคำนวณ MOE ได้ (ymax หรือค่าบางตัวเป็นศูนย์)")
-    else:
+    try:
+        moe = calc_MOE_from_excel(Fmax_N_excel, ymax, L, b, t)
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
+    except ZeroDivisionError:
+        st.error("❌ ไม่สามารถคำนวณ MOE ได้: L, b, t หรือ ymax ต้องไม่เป็นศูนย์")
+    except Exception as e:
+        st.error(f"⚠️ เกิดข้อผิดพลาด {e}")
 
-    # Plot graph
     fig, ax = plt.subplots()
     ax.plot(df["Deflection (mm)"], df["Load (N)"], marker="o")
     ax.set_xlabel("Deflection (mm)")
@@ -122,20 +122,36 @@ if uploaded:
 
     st.pyplot(fig)
 
-
 # ---------------------------------------------------------
-# Thickness Swelling
+# Thickness Swelling (TS)
 # ---------------------------------------------------------
 
 st.write("---")
-st.header("3) Thickness Swelling (TS)")
+st.header("3) Thickness Swelling (TS) – วัด 4 ด้าน")
 
-t_before = st.number_input("ความหนาก่อนแช่น้ำ (mm)", 0.0)
-t_after = st.number_input("ความหนาหลังแช่น้ำ (mm)", 0.0)
+st.subheader("ก่อนแช่น้ำ")
+before = [
+    st.number_input("ด้านที่ 1 ก่อนแช่น้ำ (mm)", 0.0, key="b1"),
+    st.number_input("ด้านที่ 2 ก่อนแช่น้ำ (mm)", 0.0, key="b2"),
+    st.number_input("ด้านที่ 3 ก่อนแช่น้ำ (mm)", 0.0, key="b3"),
+    st.number_input("ด้านที่ 4 ก่อนแช่น้ำ (mm)", 0.0, key="b4"),
+]
+
+st.subheader("หลังแช่น้ำ")
+after = [
+    st.number_input("ด้านที่ 1 หลังแช่น้ำ (mm)", 0.0, key="a1"),
+    st.number_input("ด้านที่ 2 หลังแช่น้ำ (mm)", 0.0, key="a2"),
+    st.number_input("ด้านที่ 3 หลังแช่น้ำ (mm)", 0.0, key="a3"),
+    st.number_input("ด้านที่ 4 หลังแช่น้ำ (mm)", 0.0, key="a4"),
+]
 
 if st.button("คำนวณ TS"):
-    if t_before > 0:
-        ts = calc_TS(t_before, t_after)
-        st.success(f"Thickness Swelling = {ts:.2f} %")
-    else:
-        st.error("ความหนาก่อนแช่น้ำต้องมากกว่า 0")
+    try:
+        avg_before = sum(before) / 4
+        avg_after = sum(after) / 4
+        ts = calc_TS(avg_before, avg_after)
+        st.success(f"TS = {ts:.2f} % (เฉลี่ย 4 ด้าน)")
+    except ZeroDivisionError:
+        st.error("❌ ค่าเฉลี่ยก่อนแช่น้ำต้องไม่เป็นศูนย์")
+    except Exception as e:
+        st.error(f"⚠️ เกิดข้อผิดพลาด {e}")
