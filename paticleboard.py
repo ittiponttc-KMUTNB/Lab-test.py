@@ -79,14 +79,8 @@ if uploaded:
     # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
 
-    # ---------------------------------------------------------
-    # ใช้ Deflection สูงสุดเป็นเกณฑ์ตัดช่วงขึ้น
-    # ---------------------------------------------------------
-    idx_peak = df["Deflection (mm)"].idxmax()
-    df_up = df.iloc[:idx_peak+1]
-
-    # ymax สำหรับคำนวณ MOE
-    ymax = df_up["Deflection (mm)"].max()
+    # ymax สำหรับคำนวณ MOE (ใช้ deflection สูงสุด)
+    ymax = df["Deflection (mm)"].max()
 
     # คำนวณ MOE
     moe = calc_MOE_from_excel(Fmax_N, ymax, L, b, t)
@@ -97,18 +91,17 @@ if uploaded:
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
 
     # ---------------------------------------------------------
-    # Plot Graph (Red Line Only)
+    # Plot Graph (Line Chart แบบ Excel)
     # ---------------------------------------------------------
 
     fig, ax = plt.subplots()
 
     ax.plot(
-        df_up["Deflection (mm)"],
-        df_up["Load (N)"],
+        df["Deflection (mm)"],
+        df["Load (N)"],
         color="red",
         linewidth=2,
-        marker="o",
-        label="Load–Deflection (ascending)"
+        label="Load–Deflection Curve"
     )
 
     ax.set_xlabel("Deflection (mm)")
