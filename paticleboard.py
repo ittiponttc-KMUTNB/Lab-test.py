@@ -25,19 +25,34 @@ def calc_TS(t_before, t_after):
 st.title("🧪 Particleboard Bending Test (Single Sample)")
 st.subheader("MOR • MOE (from Excel) • Thickness Swelling • Load–Deflection Graph")
 
+# ---------------------------------------------------------
+# MOR MULTI-SAMPLE
+# ---------------------------------------------------------
+
 st.write("---")
-st.header("1) กรอกข้อมูล MOR (1 ตัวอย่าง)")
+st.header("1) คำนวณ MOR (เลือกจำนวนตัวอย่าง 1–4)")
 
-L = st.number_input("ระยะห่างแท่นรองรับ L (mm)", 0.0)
-b = st.number_input("ความกว้าง b (mm)", 0.0)
-t = st.number_input("ความหนา t (mm)", 0.0)
+num_samples = st.selectbox("เลือกจำนวนตัวอย่าง", [1, 2, 3, 4])
 
-Fmax_kg = st.number_input("แรงสูงสุด Fmax (kg)", 0.0)
-Fmax_N = Fmax_kg * 9.80665
+sample_inputs = []
 
-if st.button("คำนวณ MOR"):
-    mor = calc_MOR(Fmax_N, L, b, t)
-    st.success(f"MOR = {mor:.2f} MPa")
+for i in range(num_samples):
+    st.subheader(f"ตัวอย่างที่ {i+1}")
+
+    L = st.number_input(f"L (mm) – ตัวอย่าง {i+1}", 0.0, key=f"L_{i}")
+    b = st.number_input(f"b (mm) – ตัวอย่าง {i+1}", 0.0, key=f"b_{i}")
+    t = st.number_input(f"t (mm) – ตัวอย่าง {i+1}", 0.0, key=f"t_{i}")
+    Fmax_kg = st.number_input(f"Fmax (kg) – ตัวอย่าง {i+1}", 0.0, key=f"Fmax_{i}")
+
+    sample_inputs.append((L, b, t, Fmax_kg))
+
+if st.button("คำนวณ MOR ทั้งหมด"):
+    results = []
+    for i, (L, b, t, Fmax_kg) in enumerate(sample_inputs):
+        Fmax_N = Fmax_kg * 9.80665
+        mor = calc_MOR(Fmax_N, L, b, t)
+        results.append(mor)
+        st.success(f"MOR ตัวอย่างที่ {i+1} = {mor:.2f} MPa")
 
 # ---------------------------------------------------------
 # Excel Template for Load–Deflection
@@ -48,7 +63,6 @@ st.header("2) Upload Excel เพื่อคำนวณ MOE และสร้
 
 st.info("Template Excel จะมีคอลัมน์: Load (kg), Deflection (mm)")
 
-# Create template
 template = pd.DataFrame({
     "Load (kg)": [0, 5, 10, 15],
     "Deflection (mm)": [0, 1, 2, 3]
@@ -72,13 +86,9 @@ if uploaded:
     st.write("ข้อมูลที่อ่านได้:")
     st.dataframe(df)
 
-    # Convert Load kg → N
     df["Load (N)"] = df["Load (kg)"] * 9.80665
-
-    # หา ymax จาก deflection สูงสุด
     ymax = df["Deflection (mm)"].max()
 
-    # คำนวณ MOE
     moe = calc_MOE_from_excel(Fmax_N, ymax, L, b, t)
 
     if moe is None:
@@ -86,7 +96,6 @@ if uploaded:
     else:
         st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
 
-    # Plot graph
     fig, ax = plt.subplots()
     ax.plot(df["Deflection (mm)"], df["Load (N)"], marker="o")
     ax.set_xlabel("Deflection (mm)")
