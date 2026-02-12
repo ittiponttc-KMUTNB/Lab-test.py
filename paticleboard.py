@@ -1,77 +1,69 @@
-import math
+import streamlit as st
 
 # ---------------------------------------------------------
-# 1) Modulus of Rupture (MOR)
-#    f_m = (3 * Fmax * L) / (2 * b * t^2)
+# Functions
 # ---------------------------------------------------------
+
 def calc_MOR(Fmax, L, b, t):
-    """
-    Fmax : แรงกดสูงสุด (N)
-    L    : ระยะห่างแท่นรองรับ (mm)
-    b    : ความกว้างชิ้นทดสอบ (mm)
-    t    : ความหนาชิ้นทดสอบ (mm)
-    return: MOR (MPa)
-    """
-    fm = (3 * Fmax * L) / (2 * b * t**2)  # N/mm^2 = MPa
-    return fm
+    return (3 * Fmax * L) / (2 * b * t**2)
 
-
-# ---------------------------------------------------------
-# 2) Modulus of Elasticity (MOE)
-#    MOE = (ΔF * L^3) / (4 * b * t^3 * Δy)
-# ---------------------------------------------------------
 def calc_MOE(F1, F2, y1, y2, L, b, t):
-    """
-    F1, F2 : แรงในช่วงเชิงเส้น (N)
-    y1, y2 : การโก่งตัวที่สอดคล้องกับ F1, F2 (mm)
-    L      : ระยะห่างแท่นรองรับ (mm)
-    b      : ความกว้าง (mm)
-    t      : ความหนา (mm)
-    return: MOE (MPa)
-    """
     dF = F2 - F1
     dy = y2 - y1
-    MOE = (dF * L**3) / (4 * b * t**3 * dy)  # N/mm^2 = MPa
-    return MOE
+    return (dF * L**3) / (4 * b * t**3 * dy)
 
-
-# ---------------------------------------------------------
-# 3) Thickness Swelling (TS)
-#    TS = ((t2 - t1) / t1) * 100
-# ---------------------------------------------------------
 def calc_TS(t_before, t_after):
-    """
-    t_before : ความหนาก่อนแช่น้ำ (mm)
-    t_after  : ความหนาหลังแช่น้ำ (mm)
-    return: TS (%)
-    """
-    TS = ((t_after - t_before) / t_before) * 100
-    return TS
+    return ((t_after - t_before) / t_before) * 100
 
 
 # ---------------------------------------------------------
-# 4) ตัวอย่างการใช้งาน (ใส่ค่าจริงจาก Lab)
+# Streamlit UI
 # ---------------------------------------------------------
-if __name__ == "__main__":
-    # ===== ตัวอย่างชิ้นทดสอบดัด =====
-    Fmax = 1500   # N
-    L = 300       # mm
-    b = 50        # mm
-    t = 12        # mm
 
-    mor = calc_MOR(Fmax, L, b, t)
-    print(f"MOR = {mor:.2f} MPa")
+st.title("🧪 Particleboard Testing App")
+st.subheader("Modulus of Rupture (MOR), Modulus of Elasticity (MOE), Thickness Swelling (TS)")
 
-    # สมมติเลือกจุดเชิงเส้นสองจุดจากกราฟ Load-Deflection
-    F1, F2 = 300, 600   # N
-    y1, y2 = 1.0, 2.0   # mm
+st.write("---")
+st.header("1) MOR – Modulus of Rupture")
 
-    moe = calc_MOE(F1, F2, y1, y2, L, b, t)
-    print(f"MOE = {moe:.2f} MPa")
+Fmax = st.number_input("แรงกดสูงสุด Fmax (N)", 0.0)
+L = st.number_input("ระยะห่างแท่นรองรับ L (mm)", 0.0)
+b = st.number_input("ความกว้าง b (mm)", 0.0)
+t = st.number_input("ความหนา t (mm)", 0.0)
 
-    # ===== ตัวอย่างการบวมตัว =====
-    t_before = 12.0   # mm ก่อนแช่น้ำ
-    t_after = 12.9    # mm หลังแช่น้ำ 24 ชม.
+if st.button("คำนวณ MOR"):
+    if L > 0 and b > 0 and t > 0:
+        mor = calc_MOR(Fmax, L, b, t)
+        st.success(f"MOR = {mor:.2f} MPa")
+    else:
+        st.error("กรุณากรอกค่าที่มากกว่า 0")
 
-    ts = calc_TS(t_before, t_after)
-    print(f"Thickness Swelling = {ts:.2f} %")
+
+st.write("---")
+st.header("2) MOE – Modulus of Elasticity")
+
+F1 = st.number_input("แรงจุดที่ 1 F1 (N)", 0.0)
+F2 = st.number_input("แรงจุดที่ 2 F2 (N)", 0.0)
+y1 = st.number_input("การโก่งตัวจุดที่ 1 y1 (mm)", 0.0)
+y2 = st.number_input("การโก่งตัวจุดที่ 2 y2 (mm)", 0.0)
+
+if st.button("คำนวณ MOE"):
+    if L > 0 and b > 0 and t > 0 and (y2 - y1) != 0:
+        moe = calc_MOE(F1, F2, y1, y2, L, b, t)
+        st.success(f"MOE = {moe:.2f} MPa")
+    else:
+        st.error("ตรวจสอบค่าที่กรอกอีกครั้ง")
+
+
+st.write("---")
+st.header("3) Thickness Swelling (TS)")
+
+t_before = st.number_input("ความหนาก่อนแช่น้ำ (mm)", 0.0)
+t_after = st.number_input("ความหนาหลังแช่น้ำ (mm)", 0.0)
+
+if st.button("คำนวณ TS"):
+    if t_before > 0:
+        ts = calc_TS(t_before, t_after)
+        st.success(f"Thickness Swelling = {ts:.2f} %")
+    else:
+        st.error("ความหนาก่อนแช่น้ำต้องมากกว่า 0")
