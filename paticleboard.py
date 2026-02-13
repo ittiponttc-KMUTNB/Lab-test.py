@@ -172,54 +172,40 @@ def calc_MOR(Fmax_N: float, L: float, b: float, t: float) -> float:
     return (3.0 * Fmax_N * L) / (2.0 * b * t**2)
 
 
-def calc_MOE_elastic(load_N: np.ndarray, defl_mm: np.ndarray,
-                     L: float, b: float, t: float,
-                     lower_pct: float = 0.10, upper_pct: float = 0.40):
+def calc_slope_elastic(load_N: np.ndarray, defl_mm: np.ndarray,
+                       idx_lo: int, idx_hi: int):
     """
-    MOE จาก slope ของ elastic region (linear portion ของ load-deflection curve)
-    ใช้ช่วง lower_pct – upper_pct ของ Fmax เพื่อ fit เส้นตรง
-    MOE = slope · L³ / (4·b·t³)
-    คืนค่า: (moe, slope, r_squared, idx_lo, idx_hi)
+    Slope (N/mm) จาก linear fit ของช่วงที่เลือก (idx_lo ถึง idx_hi)
+    คืนค่า: (slope, intercept, r_squared)
     """
-    if b <= 0 or t <= 0 or L <= 0:
-        raise ValueError("L, b, t ต้องมากกว่าศูนย์")
+    x = defl_mm[idx_lo:idx_hi+1]
+    y = load_N[idx_lo:idx_hi+1]
 
-    Fmax = load_N.max()
-    F_lo = Fmax * lower_pct
-    F_hi = Fmax * upper_pct
+    if hasattr(x, 'values'):
+        x = x.values
+    if hasattr(y, 'values'):
+        y = y.values
 
-    mask = (load_N >= F_lo) & (load_N <= F_hi)
-    if mask.sum() < 2:
-        # fallback: ใช้ 2 จุดแรกที่ไม่ใช่ 0
-        mask = load_N > 0
-        if mask.sum() < 2:
-            raise ValueError("ข้อมูลไม่เพียงพอสำหรับ linear fit")
-
-    x = defl_mm[mask].values if hasattr(defl_mm, 'values') else defl_mm[mask]
-    y = load_N[mask].values if hasattr(load_N, 'values') else load_N[mask]
+    if len(x) < 2:
+        raise ValueError("ต้องเลือกอย่างน้อย 2 จุดสำหรับ linear fit")
 
     coeffs = np.polyfit(x, y, 1)
-    slope = coeffs[0]  # N/mm
+    slope = coeffs[0]      # N/mm
+    intercept = coeffs[1]  # N
 
-    # R²
     y_pred = np.polyval(coeffs, x)
     ss_res = np.sum((y - y_pred)**2)
     ss_tot = np.sum((y - np.mean(y))**2)
     r_sq = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-    moe = slope * L**3 / (4.0 * b * t**3)
-
-    idx_lo = np.where(mask)[0][0]
-    idx_hi = np.where(mask)[0][-1]
-
-    return moe, slope, r_sq, idx_lo, idx_hi
+    return slope, intercept, r_sq
 
 
-def calc_MOE_simple(Fmax_N: float, ymax: float, L: float, b: float, t: float) -> float:
-    """MOE = F·L³ / (4·b·t³·δ)  — simple method (Fmax / δmax)"""
-    if b <= 0 or t <= 0 or L <= 0 or ymax <= 0:
-        raise ValueError("L, b, t, ymax ต้องมากกว่าศูนย์")
-    return (Fmax_N * L**3) / (4.0 * b * t**3 * ymax)
+def slope_to_MOE(slope: float, L: float, b: float, t: float) -> float:
+    """MOE = slope · L³ / (4·b·t³)  [MPa]"""
+    if b <= 0 or t <= 0 or L <= 0:
+        raise ValueError("L, b, t ต้องมากกว่าศูนย์")
+    return slope * L**3 / (4.0 * b * t**3)
 
 
 def calc_TS(before: list, after: list) -> tuple:
@@ -287,7 +273,7 @@ with st.sidebar:
         for i in range(ns):
             for k in ["L", "b", "t", "Fmax"]:
                 data[f"{k}_{i}"] = ss_get(f"{k}_{i}", 0.0)
-        for k in ["L_moe", "b_moe", "t_moe", "Fmax_moe"]:
+        for k in ["L_moe", "b_moe", "t_moe"]:
             data[k] = ss_get(k, 0.0)
         ns_ts = int(ss_get("num_ts_samples", 1))
         data["num_ts_samples"] = ns_ts
@@ -416,14 +402,9 @@ with tab_mor:
 with tab_moe:
     st.markdown('<div class="info-card">'
                 '<b>Modulus of Elasticity (MOE)</b> — จาก Load-Deflection curve<br>'
-                'MOE = (ΔF/Δδ) · L³ / (4·b·t³) &nbsp; [MPa]<br>'
-                '<small>คำนวณ slope จาก elastic region (10%–40% ของ F<sub>max</sub>) '
-                'ด้วย linear regression</small>'
-                '</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="warn-card">'
-                '⚠️ <b>หมายเหตุ:</b> MOE ควรคำนวณจาก slope ของ elastic region เท่านั้น '
-                'ไม่ใช่จาก F<sub>max</sub>/δ<sub>max</sub> ซึ่งรวม plastic deformation แล้ว'
+                'คำนวณ Slope (N/mm) ของ elastic region ด้วย linear regression<br>'
+                '<small>เลือกช่วง data points ที่เป็น linear (elastic) เพื่อ fit เส้นตรง<br>'
+                'หากต้องการค่า MOE (MPa) ให้เปิด "คำนวณ MOE" แล้วใส่ geometry</small>'
                 '</div>', unsafe_allow_html=True)
 
     # Template download
@@ -445,95 +426,133 @@ with tab_moe:
                 st.error("❌ ไฟล์ต้องมีคอลัมน์ 'Load (kg)' และ 'Deflection (mm)'")
             else:
                 df["Load (N)"] = df["Load (kg)"] * 9.80665
-                st.dataframe(df, use_container_width=True, height=200)
 
-                st.markdown("##### Geometry สำหรับ MOE")
-                gc1, gc2, gc3 = st.columns(3)
-                with gc1:
-                    L_moe = st.number_input("L (mm)", value=ss_get("L_moe", ss_get("L_0")),
-                                            key="L_moe", min_value=0.0, format="%.2f")
-                with gc2:
-                    b_moe = st.number_input("b (mm)", value=ss_get("b_moe", ss_get("b_0")),
-                                            key="b_moe", min_value=0.0, format="%.2f")
-                with gc3:
-                    t_moe = st.number_input("t (mm)", value=ss_get("t_moe", ss_get("t_0")),
-                                            key="t_moe", min_value=0.0, format="%.2f")
+                # แสดงตารางข้อมูลพร้อม index
+                df_display = df.copy()
+                df_display.insert(0, "Point #", range(len(df)))
+                st.dataframe(df_display, use_container_width=True, height=220)
 
-                ec1, ec2 = st.columns(2)
-                with ec1:
-                    lower_pct = st.slider("Elastic range: lower %", 5, 30, 10, 5, key="el_lo") / 100
-                with ec2:
-                    upper_pct = st.slider("Elastic range: upper %", 20, 60, 40, 5, key="el_hi") / 100
+                load_N = df["Load (N)"].values
+                defl = df["Deflection (mm)"].values
+                n_pts = len(df)
 
-                if L_moe > 0 and b_moe > 0 and t_moe > 0:
-                    load_N = df["Load (N)"].values
-                    defl = df["Deflection (mm)"].values
+                # --- เลือกช่วง Elastic Region ---
+                st.markdown("##### 🎯 เลือกช่วง Elastic Region")
+                st.markdown('<div class="warn-card">'
+                            'เลือก <b>จุดเริ่มต้น</b> และ <b>จุดสิ้นสุด</b> ของช่วงที่กราฟเป็นเส้นตรง (elastic) '
+                            'โดยดูจาก Point # ในตาราง'
+                            '</div>', unsafe_allow_html=True)
 
-                    try:
-                        moe_el, slope, r_sq, idx_lo, idx_hi = calc_MOE_elastic(
-                            load_N, defl, L_moe, b_moe, t_moe, lower_pct, upper_pct)
+                pc1, pc2 = st.columns(2)
+                with pc1:
+                    # Auto-detect: เริ่มจาก point ที่ 2 ของข้อมูลที่ load > 0
+                    default_lo = 1 if n_pts > 2 else 0
+                    idx_lo = st.number_input(
+                        "Point # เริ่มต้น (Start)",
+                        min_value=0, max_value=n_pts - 2,
+                        value=int(ss_get("el_idx_lo", default_lo)),
+                        step=1, key="el_idx_lo")
+                with pc2:
+                    # Auto-detect: ประมาณ 40-60% ของจำนวน point
+                    default_hi = min(max(n_pts // 2, idx_lo + 1), n_pts - 1)
+                    idx_hi = st.number_input(
+                        "Point # สิ้นสุด (End)",
+                        min_value=idx_lo + 1, max_value=n_pts - 1,
+                        value=int(ss_get("el_idx_hi", default_hi)),
+                        step=1, key="el_idx_hi")
 
-                        # Simple MOE for comparison
-                        Fmax_N_xl = load_N.max()
-                        ymax_xl = defl.max()
-                        moe_simple = calc_MOE_simple(Fmax_N_xl, ymax_xl, L_moe, b_moe, t_moe)
+                # --- คำนวณ Slope ---
+                try:
+                    slope, intercept, r_sq = calc_slope_elastic(load_N, defl, idx_lo, idx_hi)
 
-                        store_result("moe_elastic", moe_el)
-                        store_result("moe_simple", moe_simple)
-                        store_result("moe_r2", r_sq)
+                    store_result("moe_slope", slope)
+                    store_result("moe_intercept", intercept)
+                    store_result("moe_r2", r_sq)
 
-                        # Results
-                        rc1, rc2 = st.columns(2)
-                        with rc1:
+                    # แสดงผล Slope
+                    st.markdown(f'<div class="result-card">'
+                                f'<b>Slope (Elastic Region)</b> &nbsp; '
+                                f'Point #{idx_lo} → #{idx_hi} '
+                                f'({idx_hi - idx_lo + 1} points)<br>'
+                                f'<span style="font-size:26px;">{slope:.2f}</span> N/mm'
+                                f'&nbsp;&nbsp;&nbsp;'
+                                f'<span style="font-size:16px; color:#64748b;">'
+                                f'R² = {r_sq:.4f}</span></div>',
+                                unsafe_allow_html=True)
+
+                    # --- Optional: คำนวณ MOE (MPa) ---
+                    with st.expander("📐 คำนวณ MOE (MPa) — ต้องใส่ Geometry", expanded=False):
+                        st.markdown("MOE = Slope × L³ / (4·b·t³)")
+                        gc1, gc2, gc3 = st.columns(3)
+                        with gc1:
+                            L_moe = st.number_input("L (mm)", value=ss_get("L_moe", ss_get("L_0")),
+                                                    key="L_moe", min_value=0.0, format="%.2f")
+                        with gc2:
+                            b_moe = st.number_input("b (mm)", value=ss_get("b_moe", ss_get("b_0")),
+                                                    key="b_moe", min_value=0.0, format="%.2f")
+                        with gc3:
+                            t_moe = st.number_input("t (mm)", value=ss_get("t_moe", ss_get("t_0")),
+                                                    key="t_moe", min_value=0.0, format="%.2f")
+
+                        if L_moe > 0 and b_moe > 0 and t_moe > 0:
+                            moe_val = slope_to_MOE(slope, L_moe, b_moe, t_moe)
+                            store_result("moe_elastic", moe_val)
                             st.markdown(f'<div class="result-card">'
-                                        f'<b>MOE (Elastic Region)</b><br>'
-                                        f'<span style="font-size:24px;">{moe_el:.2f}</span> MPa<br>'
-                                        f'<small>Slope = {slope:.2f} N/mm &nbsp;|&nbsp; '
-                                        f'R² = {r_sq:.4f}</small></div>',
-                                        unsafe_allow_html=True)
-                        with rc2:
-                            st.markdown(f'<div class="summary-card">'
-                                        f'<b>MOE (Simple: Fmax/δmax)</b><br>'
-                                        f'<span style="font-size:24px;">{moe_simple:.2f}</span> MPa<br>'
-                                        f'<small>⚠️ รวม plastic deformation — '
-                                        f'ค่าต่ำกว่าวิธี elastic region</small></div>',
-                                        unsafe_allow_html=True)
+                                        f'<b>MOE</b> = '
+                                        f'<span style="font-size:24px;">{moe_val:.2f}</span> MPa'
+                                        f'</div>', unsafe_allow_html=True)
+                        else:
+                            st.info("ใส่ L, b, t ให้ครบเพื่อคำนวณ MOE (MPa)")
 
-                        # Plot
-                        fig, ax = plt.subplots(figsize=(8, 5))
-                        fig.patch.set_facecolor('#fafbfe')
-                        ax.set_facecolor('#fafbfe')
+                    # --- กราฟ ---
+                    fig, ax = plt.subplots(figsize=(9, 5.5))
+                    fig.patch.set_facecolor('#fafbfe')
+                    ax.set_facecolor('#fafbfe')
 
-                        ax.plot(defl, load_N, 'o-', color='#3b82f6', linewidth=2,
-                                markersize=6, label='Test Data', zorder=3)
+                    # All data points
+                    ax.plot(defl, load_N, 'o-', color='#94a3b8', linewidth=1.5,
+                            markersize=5, label='Test Data', zorder=2)
 
-                        # Elastic region highlight
-                        el_defl = defl[idx_lo:idx_hi+1]
-                        el_load = load_N[idx_lo:idx_hi+1]
-                        ax.plot(el_defl, el_load, 's', color='#10b981', markersize=10,
-                                label=f'Elastic Region ({int(lower_pct*100)}%-{int(upper_pct*100)}% Fmax)',
-                                zorder=4)
+                    # Elastic region highlight
+                    el_defl = defl[idx_lo:idx_hi+1]
+                    el_load = load_N[idx_lo:idx_hi+1]
+                    ax.plot(el_defl, el_load, 'o', color='#10b981', markersize=10,
+                            markeredgecolor='white', markeredgewidth=1.5,
+                            label=f'Elastic Region (#{idx_lo}–#{idx_hi})',
+                            zorder=5)
 
-                        # Linear fit line
-                        x_fit = np.linspace(0, defl.max() * 0.6, 100)
-                        y_fit = slope * x_fit + (np.polyfit(el_defl, el_load, 1)[1])
-                        ax.plot(x_fit, y_fit, '--', color='#ef4444', linewidth=1.5,
-                                label=f'Linear Fit (slope={slope:.1f} N/mm)', zorder=2)
+                    # Linear fit line — ต่อเส้นให้ยาวพอเห็น
+                    x_min_fit = max(0, defl[idx_lo] - (defl[idx_hi] - defl[idx_lo]) * 0.3)
+                    x_max_fit = defl[idx_hi] + (defl[idx_hi] - defl[idx_lo]) * 0.5
+                    x_fit = np.linspace(x_min_fit, x_max_fit, 100)
+                    y_fit = slope * x_fit + intercept
+                    ax.plot(x_fit, y_fit, '--', color='#ef4444', linewidth=2,
+                            label=f'Linear Fit (slope={slope:.1f} N/mm, R²={r_sq:.3f})',
+                            zorder=3)
 
-                        ax.set_xlabel("Deflection (mm)", fontsize=13, fontweight='bold')
-                        ax.set_ylabel("Load (N)", fontsize=13, fontweight='bold')
-                        ax.set_title("Load–Deflection Curve", fontsize=15, fontweight='bold')
-                        ax.legend(fontsize=10, loc='lower right')
-                        ax.grid(True, alpha=0.3)
-                        ax.spines[['top', 'right']].set_visible(False)
+                    # Annotate points
+                    for k in [idx_lo, idx_hi]:
+                        ax.annotate(f'#{k}', xy=(defl[k], load_N[k]),
+                                    xytext=(8, 10), textcoords='offset points',
+                                    fontsize=10, fontweight='bold', color='#10b981',
+                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                                              edgecolor='#10b981', alpha=0.9))
 
-                        st.pyplot(fig)
-                        store_result("moe_fig", fig)
+                    ax.set_xlabel("Deflection (mm)", fontsize=13, fontweight='bold')
+                    ax.set_ylabel("Load (N)", fontsize=13, fontweight='bold')
+                    ax.set_title("Load–Deflection Curve", fontsize=16, fontweight='bold')
+                    ax.legend(fontsize=9, loc='best',
+                              framealpha=0.9, edgecolor='#e2e8f0')
+                    ax.grid(True, alpha=0.25, linestyle='--')
+                    ax.spines[['top', 'right']].set_visible(False)
+                    plt.tight_layout()
 
-                    except Exception as e:
-                        st.error(f"❌ คำนวณ MOE ไม่ได้: {e}")
-                else:
-                    st.warning("กรุณาใส่ค่า L, b, t ให้มากกว่า 0")
+                    st.pyplot(fig)
+                    store_result("moe_fig", fig)
+
+                except Exception as e:
+                    st.error(f"❌ คำนวณ Slope ไม่ได้: {e}")
+
         except Exception as e:
             st.error(f"❌ อ่านไฟล์ Excel ไม่ได้: {e}")
 
@@ -644,14 +663,14 @@ with tab_summary:
                         unsafe_allow_html=True)
 
     # MOE
-    moe_el = ss_get("moe_elastic", None)
-    if moe_el:
+    moe_slope = ss_get("moe_slope", None)
+    if moe_slope:
         st.markdown("##### MOE Results")
-        st.markdown(f'<div class="summary-card">'
-                    f'<b>MOE (Elastic):</b> {moe_el:.2f} MPa &nbsp;|&nbsp; '
-                    f'R² = {ss_get("moe_r2", 0):.4f}<br>'
-                    f'<b>MOE (Simple):</b> {ss_get("moe_simple", 0):.2f} MPa</div>',
-                    unsafe_allow_html=True)
+        moe_el = ss_get("moe_elastic", None)
+        moe_text = f'<b>Slope (Elastic):</b> {moe_slope:.2f} N/mm &nbsp;|&nbsp; R² = {ss_get("moe_r2", 0):.4f}'
+        if moe_el:
+            moe_text += f'<br><b>MOE:</b> {moe_el:.2f} MPa'
+        st.markdown(f'<div class="summary-card">{moe_text}</div>', unsafe_allow_html=True)
 
     # TS table
     ts_data = []
@@ -677,7 +696,7 @@ with tab_summary:
                         f'CV = {ts_s.get("cv",0):.1f}%</div>',
                         unsafe_allow_html=True)
 
-    if not mor_data and not moe_el and not ts_data:
+    if not mor_data and not moe_slope and not ts_data:
         st.info("ยังไม่มีผลลัพธ์ — กรุณาใส่ข้อมูลใน Tab ① ② ③ ก่อน")
 
 # =============================================================
@@ -709,13 +728,16 @@ with tab_export:
                         df_t.to_excel(writer, sheet_name="TS", index=False)
 
                     # MOE sheet
-                    moe_el_v = ss_get("moe_elastic", None)
-                    if moe_el_v:
-                        df_moe = pd.DataFrame([{
-                            "MOE_Elastic (MPa)": round(moe_el_v, 2),
+                    moe_slope_v = ss_get("moe_slope", None)
+                    if moe_slope_v:
+                        moe_row = {
+                            "Slope (N/mm)": round(moe_slope_v, 2),
                             "R²": round(ss_get("moe_r2", 0), 4),
-                            "MOE_Simple (MPa)": round(ss_get("moe_simple", 0), 2),
-                        }])
+                        }
+                        moe_el_v = ss_get("moe_elastic", None)
+                        if moe_el_v:
+                            moe_row["MOE (MPa)"] = round(moe_el_v, 2)
+                        df_moe = pd.DataFrame([moe_row])
                         df_moe.to_excel(writer, sheet_name="MOE", index=False)
 
                 buf.seek(0)
@@ -763,14 +785,15 @@ with tab_export:
                             f'CV = {mor_s["cv"]:.1f}%')
 
                 # MOE section
-                moe_el_v = ss_get("moe_elastic", None)
-                if moe_el_v:
+                moe_slope_v = ss_get("moe_slope", None)
+                if moe_slope_v:
                     doc.add_heading("2. Modulus of Elasticity (MOE)", level=2)
                     doc.add_paragraph(
-                        f'MOE (Elastic Region) = {moe_el_v:.2f} MPa  |  '
+                        f'Slope (Elastic Region) = {moe_slope_v:.2f} N/mm  |  '
                         f'R² = {ss_get("moe_r2", 0):.4f}')
-                    doc.add_paragraph(
-                        f'MOE (Simple: Fmax/δmax) = {ss_get("moe_simple", 0):.2f} MPa')
+                    moe_el_v = ss_get("moe_elastic", None)
+                    if moe_el_v:
+                        doc.add_paragraph(f'MOE = {moe_el_v:.2f} MPa')
 
                 # TS section
                 if ts_data:
