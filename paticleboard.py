@@ -1,343 +1,826 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import io
 import json
 from docx import Document
+from docx.shared import Pt, Inches, Cm, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
 
-# ---------------------------------------------------------
-# Calculation Functions
-# ---------------------------------------------------------
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
 
-def calc_MOR(Fmax_N, L, b, t):
-    return (3 * Fmax_N * L) / (2 * b * t**2)
-
-def calc_MOE_from_excel(Fmax_N, ymax, L, b, t):
-    if ymax == 0 or b == 0 or t == 0:
-        raise ZeroDivisionError
-    return (Fmax_N * L**3) / (4 * b * t**3 * ymax)
-
-def calc_TS(avg_before, avg_after):
-    if avg_before == 0:
-        raise ZeroDivisionError
-    return ((avg_after - avg_before) / avg_before) * 100
-
-# ---------------------------------------------------------
-# Sidebar: JSON Upload
-# ---------------------------------------------------------
-
-st.sidebar.header("📂 โหลด/บันทึกค่าพารามิเตอร์")
-
-uploaded_json = st.sidebar.file_uploader("Upload JSON", type=["json"])
-
-if uploaded_json is not None:
-    try:
-        loaded_data = json.load(uploaded_json)
-        file_id = f"{uploaded_json.name}_{uploaded_json.size}"
-        if st.session_state.get("last_uploaded_file") != file_id:
-            st.session_state["last_uploaded_file"] = file_id
-            for key, value in loaded_data.items():
-                st.session_state[key] = value
-            st.sidebar.success("✅ โหลดข้อมูลจาก JSON สำเร็จ")
-            st.rerun()
-    except Exception as e:
-        st.sidebar.error(f"❌ อ่านไฟล์ JSON ไม่ได้: {e}")
-
-# ---------------------------------------------------------
-# Main UI
-# ---------------------------------------------------------
-
-st.title("🧪 Particleboard Bending Test")
-st.subheader("MOR • MOE • Thickness Swelling • Load–Deflection Graph")
-
-# ---------------------------------------------------------
-# 1) MOR – เลือกจำนวนตัวอย่าง 1–4
-# ---------------------------------------------------------
-
-st.write("---")
-st.header("1) คำนวณ MOR (เลือกจำนวนตัวอย่าง 1–4)")
-
-num_samples = st.selectbox(
-    "เลือกจำนวนตัวอย่าง",
-    [1, 2, 3, 4],
-    index=[1, 2, 3, 4].index(st.session_state.get("num_samples", 1)),
-    key="num_samples"
+# =============================================================
+# Page Config
+# =============================================================
+st.set_page_config(
+    page_title="Particleboard Bending Test",
+    page_icon="🧪",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-sample_inputs = []
-
-for i in range(num_samples):
-    st.subheader(f"ตัวอย่างที่ {i+1}")
-
-    L = st.number_input(
-        f"ระยะ Support, L (mm) – ตัวอย่าง {i+1}",
-        value=st.session_state.get(f"L_{i}", 0.0),
-        key=f"L_{i}"
-    )
-    b = st.number_input(
-        f"ความกว้างชิ้นตัวอย่าง, b (mm) – ตัวอย่าง {i+1}",
-        value=st.session_state.get(f"b_{i}", 0.0),
-        key=f"b_{i}"
-    )
-    t = st.number_input(
-        f"ความหนาชิ้นตัวอย่าง, t (mm) – ตัวอย่าง {i+1}",
-        value=st.session_state.get(f"t_{i}", 0.0),
-        key=f"t_{i}"
-    )
-    Fmax_kg = st.number_input(
-        f"แรงกดสูงสุด, Fmax (kg) – ตัวอย่าง {i+1}",
-        value=st.session_state.get(f"Fmax_{i}", 0.0),
-        key=f"Fmax_{i}"
-    )
-
-    sample_inputs.append((L, b, t, Fmax_kg))
-
-if st.button("คำนวณ MOR ทั้งหมด"):
-    for i, (L, b, t, Fmax_kg) in enumerate(sample_inputs):
-        try:
-            Fmax_N = Fmax_kg * 9.80665
-            mor = calc_MOR(Fmax_N, L, b, t)
-            st.success(f"MOR ตัวอย่างที่ {i+1} = {mor:.2f} MPa")
-        except ZeroDivisionError:
-            st.error(f"❌ ตัวอย่างที่ {i+1}: L, b, t ต้องไม่เป็นศูนย์")
-        except Exception as e:
-            st.error(f"⚠️ ตัวอย่างที่ {i+1}: เกิดข้อผิดพลาด {e}")
-
-# ---------------------------------------------------------
-# 2) MOE + Load–Deflection จาก Excel
-# ---------------------------------------------------------
-
-st.write("---")
-st.header("2) Upload Excel เพื่อคำนวณ MOE และสร้างกราฟ")
-
-st.info("Template Excel จะมีคอลัมน์: Load (kg), Deflection (mm)")
-
-template = pd.DataFrame({
-    "Load (kg)": [0, 5, 10, 15],
-    "Deflection (mm)": [0, 1, 2, 3]
-})
-
-buffer_template = io.BytesIO()
-template.to_excel(buffer_template, index=False)
-buffer_template.seek(0)
-
-st.download_button(
-    label="📥 ดาวน์โหลด Template Excel",
-    data=buffer_template,
-    file_name="load_deflection_template.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-
-uploaded = st.file_uploader("อัปโหลดไฟล์ Excel", type=["xlsx"])
-
-if uploaded:
-    df = pd.read_excel(uploaded)
-    st.write("ข้อมูลที่อ่านได้:")
-    st.dataframe(df)
-
-    df["Load (N)"] = df["Load (kg)"] * 9.80665
-
-    auto_Fmax_kg = float(df["Load (kg)"].max())
-    Fmax_kg_excel = st.number_input(
-        "Fmax (kg) สำหรับคำนวณ MOE (ดึงจาก Excel อัตโนมัติ แก้ไขได้)",
-        value=st.session_state.get("Fmax_moe", auto_Fmax_kg),
-        key="Fmax_moe"
-    )
-    Fmax_N_excel = Fmax_kg_excel * 9.80665
-
-    # ใช้ geometry จากตัวอย่างที่ 1 (หรือจะแยกชุดใหม่ก็ได้)
-    L_moe = st.number_input(
-        "L (mm) สำหรับ MOE",
-        value=st.session_state.get("L_moe", st.session_state.get("L_0", 0.0)),
-        key="L_moe"
-    )
-    b_moe = st.number_input(
-        "b (mm) สำหรับ MOE",
-        value=st.session_state.get("b_moe", st.session_state.get("b_0", 0.0)),
-        key="b_moe"
-    )
-    t_moe = st.number_input(
-        "t (mm) สำหรับ MOE",
-        value=st.session_state.get("t_moe", st.session_state.get("t_0", 0.0)),
-        key="t_moe"
-    )
-
-    ymax = df["Deflection (mm)"].max()
-
-    if st.button("คำนวณ MOE จาก Excel"):
-        try:
-            moe = calc_MOE_from_excel(Fmax_N_excel, ymax, L_moe, b_moe, t_moe)
-            st.success(f"MOE (จาก Excel) = {moe:.2f} MPa")
-        except ZeroDivisionError:
-            st.error("❌ ไม่สามารถคำนวณ MOE ได้: L, b, t หรือ ymax ต้องไม่เป็นศูนย์")
-        except Exception as e:
-            st.error(f"⚠️ เกิดข้อผิดพลาด {e}")
-
-    fig, ax = plt.subplots()
-    ax.plot(df["Deflection (mm)"], df["Load (N)"], marker="o")
-    ax.set_xlabel("Deflection (mm)")
-    ax.set_ylabel("Load (N)")
-    ax.set_title("Load–Deflection Curve")
-    ax.grid(True)
-    st.pyplot(fig)
-
-# ---------------------------------------------------------
-# 3) Thickness Swelling (TS) – วัด 4 ด้าน
-# ---------------------------------------------------------
-
-st.write("---")
-st.header("3) Thickness Swelling (TS) – วัด 4 ด้าน")
-
-st.subheader("ก่อนแช่น้ำ")
-before = [
-    st.number_input("ด้านที่ 1 ก่อนแช่น้ำ (mm)", value=st.session_state.get("b1", 0.0), key="b1"),
-    st.number_input("ด้านที่ 2 ก่อนแช่น้ำ (mm)", value=st.session_state.get("b2", 0.0), key="b2"),
-    st.number_input("ด้านที่ 3 ก่อนแช่น้ำ (mm)", value=st.session_state.get("b3", 0.0), key="b3"),
-    st.number_input("ด้านที่ 4 ก่อนแช่น้ำ (mm)", value=st.session_state.get("b4", 0.0), key="b4"),
-]
-
-st.subheader("หลังแช่น้ำ")
-after = [
-    st.number_input("ด้านที่ 1 หลังแช่น้ำ (mm)", value=st.session_state.get("a1", 0.0), key="a1"),
-    st.number_input("ด้านที่ 2 หลังแช่น้ำ (mm)", value=st.session_state.get("a2", 0.0), key="a2"),
-    st.number_input("ด้านที่ 3 หลังแช่น้ำ (mm)", value=st.session_state.get("a3", 0.0), key="a3"),
-    st.number_input("ด้านที่ 4 หลังแช่น้ำ (mm)", value=st.session_state.get("a4", 0.0), key="a4"),
-]
-
-if st.button("คำนวณ TS"):
-    try:
-        avg_before = sum(before) / 4
-        avg_after = sum(after) / 4
-        ts = calc_TS(avg_before, avg_after)
-        st.success(f"TS = {ts:.2f} % (เฉลี่ย 4 ด้าน)")
-    except ZeroDivisionError:
-        st.error("❌ ค่าเฉลี่ยก่อนแช่น้ำต้องไม่เป็นศูนย์")
-    except Exception as e:
-        st.error(f"⚠️ เกิดข้อผิดพลาด {e}")
-
-# ---------------------------------------------------------
-# 4) Export JSON / Excel / Word
-# ---------------------------------------------------------
-
-st.write("---")
-st.header("4) บันทึกผลการทดสอบ")
-
-# JSON
-export_data = {
-    "num_samples": st.session_state.get("num_samples", 1),
-    "L_0": st.session_state.get("L_0", 0),
-    "b_0": st.session_state.get("b_0", 0),
-    "t_0": st.session_state.get("t_0", 0),
-    "Fmax_0": st.session_state.get("Fmax_0", 0),
-    "L_moe": st.session_state.get("L_moe", 0),
-    "b_moe": st.session_state.get("b_moe", 0),
-    "t_moe": st.session_state.get("t_moe", 0),
-    "Fmax_moe": st.session_state.get("Fmax_moe", 0),
-    "b1": st.session_state.get("b1", 0),
-    "b2": st.session_state.get("b2", 0),
-    "b3": st.session_state.get("b3", 0),
-    "b4": st.session_state.get("b4", 0),
-    "a1": st.session_state.get("a1", 0),
-    "a2": st.session_state.get("a2", 0),
-    "a3": st.session_state.get("a3", 0),
-    "a4": st.session_state.get("a4", 0),
-}
-
-json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
-
-st.download_button(
-    label="💾 Download Input (JSON)",
-    data=json_str,
-    file_name="input_data.json",
-    mime="application/json"
-)
-
-# Excel
-if st.button("📊 เตรียมไฟล์ Excel"):
-    export_excel = {
-        "L_moe": [st.session_state.get("L_moe", 0)],
-        "b_moe": [st.session_state.get("b_moe", 0)],
-        "t_moe": [st.session_state.get("t_moe", 0)],
-        "Fmax_moe": [st.session_state.get("Fmax_moe", 0)],
-        "Before_1": [st.session_state.get("b1", 0)],
-        "Before_2": [st.session_state.get("b2", 0)],
-        "Before_3": [st.session_state.get("b3", 0)],
-        "Before_4": [st.session_state.get("b4", 0)],
-        "After_1": [st.session_state.get("a1", 0)],
-        "After_2": [st.session_state.get("a2", 0)],
-        "After_3": [st.session_state.get("a3", 0)],
-        "After_4": [st.session_state.get("a4", 0)],
+# =============================================================
+# Custom CSS — Clean Engineering Theme
+# =============================================================
+st.markdown("""
+<style>
+    /* Main background */
+    .stApp {
+        background: linear-gradient(135deg, #f8f9fc 0%, #eef1f8 100%);
     }
-    df_export = pd.DataFrame(export_excel)
-    buffer_xlsx = io.BytesIO()
-    df_export.to_excel(buffer_xlsx, index=False)
-    buffer_xlsx.seek(0)
 
-    st.download_button(
-        label="📥 Download Excel (.xlsx)",
-        data=buffer_xlsx,
-        file_name="particleboard_data.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    }
+    section[data-testid="stSidebar"] * {
+        color: #e2e8f0 !important;
+    }
+    section[data-testid="stSidebar"] .stMarkdown h1,
+    section[data-testid="stSidebar"] .stMarkdown h2,
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #38bdf8 !important;
+    }
+
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: white;
+        border-radius: 12px;
+        padding: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 10px 24px;
+        font-weight: 600;
+        font-size: 15px;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+        color: white !important;
+        border-radius: 8px;
+    }
+
+    /* Cards */
+    .info-card {
+        background: white;
+        border-radius: 14px;
+        padding: 20px 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-left: 4px solid #3b82f6;
+        margin-bottom: 16px;
+    }
+    .result-card {
+        background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+        border-radius: 14px;
+        padding: 20px 24px;
+        border-left: 4px solid #10b981;
+        margin-bottom: 12px;
+    }
+    .warn-card {
+        background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+        border-radius: 14px;
+        padding: 16px 20px;
+        border-left: 4px solid #f59e0b;
+        margin-bottom: 12px;
+        font-size: 14px;
+    }
+    .summary-card {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-radius: 14px;
+        padding: 20px 24px;
+        border-left: 4px solid #2563eb;
+        margin-bottom: 12px;
+    }
+
+    /* Metric boxes */
+    .metric-box {
+        background: white;
+        border-radius: 12px;
+        padding: 18px;
+        text-align: center;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        border: 1px solid #e2e8f0;
+    }
+    .metric-box .label {
+        font-size: 13px;
+        color: #64748b;
+        font-weight: 500;
+        margin-bottom: 4px;
+    }
+    .metric-box .value {
+        font-size: 26px;
+        font-weight: 700;
+        color: #1e293b;
+    }
+    .metric-box .unit {
+        font-size: 13px;
+        color: #94a3b8;
+    }
+
+    /* Header banner */
+    .header-banner {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #3b82f6 100%);
+        color: white;
+        padding: 28px 32px;
+        border-radius: 16px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 16px rgba(37,99,235,0.2);
+    }
+    .header-banner h1 {
+        margin: 0; font-size: 28px; font-weight: 700;
+    }
+    .header-banner p {
+        margin: 6px 0 0 0; font-size: 15px; opacity: 0.88;
+    }
+
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 20px;
+        margin-top: 32px;
+        color: #64748b;
+        font-size: 14px;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    /* Number input compact */
+    .stNumberInput > div { max-width: 100%; }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 10px;
+        font-weight: 600;
+        padding: 8px 20px;
+        transition: all 0.2s;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# =============================================================
+# Calculation Functions
+# =============================================================
+
+def calc_MOR(Fmax_N: float, L: float, b: float, t: float) -> float:
+    """MOR = 3·F·L / (2·b·t²)  [Three-point bending]"""
+    if b <= 0 or t <= 0 or L <= 0:
+        raise ValueError("L, b, t ต้องมากกว่าศูนย์")
+    return (3.0 * Fmax_N * L) / (2.0 * b * t**2)
+
+
+def calc_MOE_elastic(load_N: np.ndarray, defl_mm: np.ndarray,
+                     L: float, b: float, t: float,
+                     lower_pct: float = 0.10, upper_pct: float = 0.40):
+    """
+    MOE จาก slope ของ elastic region (linear portion ของ load-deflection curve)
+    ใช้ช่วง lower_pct – upper_pct ของ Fmax เพื่อ fit เส้นตรง
+    MOE = slope · L³ / (4·b·t³)
+    คืนค่า: (moe, slope, r_squared, idx_lo, idx_hi)
+    """
+    if b <= 0 or t <= 0 or L <= 0:
+        raise ValueError("L, b, t ต้องมากกว่าศูนย์")
+
+    Fmax = load_N.max()
+    F_lo = Fmax * lower_pct
+    F_hi = Fmax * upper_pct
+
+    mask = (load_N >= F_lo) & (load_N <= F_hi)
+    if mask.sum() < 2:
+        # fallback: ใช้ 2 จุดแรกที่ไม่ใช่ 0
+        mask = load_N > 0
+        if mask.sum() < 2:
+            raise ValueError("ข้อมูลไม่เพียงพอสำหรับ linear fit")
+
+    x = defl_mm[mask].values if hasattr(defl_mm, 'values') else defl_mm[mask]
+    y = load_N[mask].values if hasattr(load_N, 'values') else load_N[mask]
+
+    coeffs = np.polyfit(x, y, 1)
+    slope = coeffs[0]  # N/mm
+
+    # R²
+    y_pred = np.polyval(coeffs, x)
+    ss_res = np.sum((y - y_pred)**2)
+    ss_tot = np.sum((y - np.mean(y))**2)
+    r_sq = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+    moe = slope * L**3 / (4.0 * b * t**3)
+
+    idx_lo = np.where(mask)[0][0]
+    idx_hi = np.where(mask)[0][-1]
+
+    return moe, slope, r_sq, idx_lo, idx_hi
+
+
+def calc_MOE_simple(Fmax_N: float, ymax: float, L: float, b: float, t: float) -> float:
+    """MOE = F·L³ / (4·b·t³·δ)  — simple method (Fmax / δmax)"""
+    if b <= 0 or t <= 0 or L <= 0 or ymax <= 0:
+        raise ValueError("L, b, t, ymax ต้องมากกว่าศูนย์")
+    return (Fmax_N * L**3) / (4.0 * b * t**3 * ymax)
+
+
+def calc_TS(before: list, after: list) -> tuple:
+    """คืนค่า (avg_before, avg_after, ts_percent)"""
+    avg_b = np.mean(before)
+    avg_a = np.mean(after)
+    if avg_b <= 0:
+        raise ValueError("ค่าเฉลี่ยก่อนแช่น้ำต้องมากกว่าศูนย์")
+    ts = ((avg_a - avg_b) / avg_b) * 100.0
+    return avg_b, avg_a, ts
+
+
+def calc_statistics(values: list) -> dict:
+    """คำนวณ mean, sd, cv, min, max"""
+    arr = np.array([v for v in values if v is not None and not np.isnan(v)])
+    if len(arr) == 0:
+        return {"n": 0, "mean": 0, "sd": 0, "cv": 0, "min": 0, "max": 0}
+    m = np.mean(arr)
+    s = np.std(arr, ddof=1) if len(arr) > 1 else 0.0
+    return {
+        "n": len(arr),
+        "mean": m,
+        "sd": s,
+        "cv": (s / m * 100) if m != 0 else 0,
+        "min": np.min(arr),
+        "max": np.max(arr),
+    }
+
+# =============================================================
+# Helper: init session state
+# =============================================================
+def ss_get(key, default=0.0):
+    return st.session_state.get(key, default)
+
+def store_result(key, value):
+    st.session_state[key] = value
+
+# =============================================================
+# Sidebar
+# =============================================================
+with st.sidebar:
+    st.markdown("### ⚙️ Settings")
+
+    st.markdown("---")
+    st.markdown("#### 📂 Save / Load Parameters")
+
+    uploaded_json = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed")
+    if uploaded_json is not None:
+        try:
+            loaded_data = json.load(uploaded_json)
+            file_id = f"{uploaded_json.name}_{uploaded_json.size}"
+            if ss_get("last_uploaded_file", "") != file_id:
+                store_result("last_uploaded_file", file_id)
+                for key, value in loaded_data.items():
+                    st.session_state[key] = value
+                st.success("✅ โหลดสำเร็จ")
+                st.rerun()
+        except Exception as e:
+            st.error(f"❌ อ่านไฟล์ไม่ได้: {e}")
+
+    # Export JSON
+    def build_export_data():
+        ns = int(ss_get("num_samples", 1))
+        data = {"num_samples": ns}
+        for i in range(ns):
+            for k in ["L", "b", "t", "Fmax"]:
+                data[f"{k}_{i}"] = ss_get(f"{k}_{i}", 0.0)
+        for k in ["L_moe", "b_moe", "t_moe", "Fmax_moe"]:
+            data[k] = ss_get(k, 0.0)
+        ns_ts = int(ss_get("num_ts_samples", 1))
+        data["num_ts_samples"] = ns_ts
+        for j in range(ns_ts):
+            for side in range(1, 5):
+                data[f"ts_b{side}_{j}"] = ss_get(f"ts_b{side}_{j}", 0.0)
+                data[f"ts_a{side}_{j}"] = ss_get(f"ts_a{side}_{j}", 0.0)
+        return data
+
+    json_str = json.dumps(build_export_data(), ensure_ascii=False, indent=2)
+    st.download_button("💾 Download JSON", data=json_str,
+                       file_name="particleboard_params.json", mime="application/json")
+
+    st.markdown("---")
+    st.markdown("#### 📋 Standard Reference")
+    standard = st.selectbox("มาตรฐานอ้างอิง", [
+        "TIS 876-2547 (มอก.)",
+        "JIS A 5908:2003",
+        "EN 310:1993",
+        "ASTM D1037",
+        "Other / ไม่ระบุ"
+    ], key="standard_ref")
+
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align:center; font-size:12px; opacity:0.6; padding-top:20px;'>"
+        "Particleboard Test v2.0</div>",
+        unsafe_allow_html=True
     )
 
-# Word
-if st.button("📄 Export Word Report"):
-    try:
-        doc = Document()
-        doc.add_heading("Particleboard Test Report", level=1)
+# =============================================================
+# Header
+# =============================================================
+st.markdown("""
+<div class="header-banner">
+    <h1>🧪 Particleboard Bending Test</h1>
+    <p>MOR • MOE (Elastic Region) • Thickness Swelling • Summary Report</p>
+</div>
+""", unsafe_allow_html=True)
 
-        doc.add_heading("MOR Parameters (ตัวอย่างที่ 1)", level=2)
-        doc.add_paragraph(f"L = {st.session_state.get('L_0', 0)} mm")
-        doc.add_paragraph(f"b = {st.session_state.get('b_0', 0)} mm")
-        doc.add_paragraph(f"t = {st.session_state.get('t_0', 0)} mm")
-        doc.add_paragraph(f"Fmax = {st.session_state.get('Fmax_0', 0)} kg")
+# =============================================================
+# Tabs
+# =============================================================
+tab_mor, tab_moe, tab_ts, tab_summary, tab_export = st.tabs([
+    "① MOR", "② MOE + Graph", "③ Thickness Swelling", "④ Summary", "⑤ Export"
+])
 
-        doc.add_heading("MOE Parameters", level=2)
-        doc.add_paragraph(f"L_moe = {st.session_state.get('L_moe', 0)} mm")
-        doc.add_paragraph(f"b_moe = {st.session_state.get('b_moe', 0)} mm")
-        doc.add_paragraph(f"t_moe = {st.session_state.get('t_moe', 0)} mm")
-        doc.add_paragraph(f"Fmax_moe = {st.session_state.get('Fmax_moe', 0)} kg")
+# =============================================================
+# TAB 1: MOR
+# =============================================================
+with tab_mor:
+    st.markdown('<div class="info-card">'
+                '<b>Modulus of Rupture (MOR)</b> — Three-point bending test<br>'
+                'MOR = 3·F<sub>max</sub>·L / (2·b·t²) &nbsp; [MPa = N/mm²]<br>'
+                f'<small>📋 Standard: {standard}</small>'
+                '</div>', unsafe_allow_html=True)
 
-        doc.add_heading("Thickness Swelling (TS)", level=2)
-        doc.add_paragraph(
-            f"Before (4 ด้าน) = "
-            f"{st.session_state.get('b1', 0)}, "
-            f"{st.session_state.get('b2', 0)}, "
-            f"{st.session_state.get('b3', 0)}, "
-            f"{st.session_state.get('b4', 0)}"
-        )
-        doc.add_paragraph(
-            f"After (4 ด้าน) = "
-            f"{st.session_state.get('a1', 0)}, "
-            f"{st.session_state.get('a2', 0)}, "
-            f"{st.session_state.get('a3', 0)}, "
-            f"{st.session_state.get('a4', 0)}"
-        )
+    num_samples = st.selectbox("จำนวนตัวอย่าง", [1, 2, 3, 4],
+                               index=[1,2,3,4].index(int(ss_get("num_samples", 1))),
+                               key="num_samples")
 
-        buffer_docx = io.BytesIO()
-        doc.save(buffer_docx)
-        buffer_docx.seek(0)
+    mor_results = []
 
-        st.download_button(
-            "📥 Download Word Report",
-            data=buffer_docx,
-            file_name="particleboard_report.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-    except Exception as e:
-        st.error(f"⚠️ ไม่สามารถสร้าง Word report ได้: {e}")
-# ---------------------------------------------------------
-# Footer Credit
-# ---------------------------------------------------------
+    for i in range(num_samples):
+        with st.expander(f"📐 ตัวอย่างที่ {i+1}", expanded=(i == 0)):
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                L = st.number_input("L (mm)", value=ss_get(f"L_{i}"), key=f"L_{i}",
+                                    min_value=0.0, format="%.2f")
+            with c2:
+                b = st.number_input("b (mm)", value=ss_get(f"b_{i}"), key=f"b_{i}",
+                                    min_value=0.0, format="%.2f")
+            with c3:
+                t = st.number_input("t (mm)", value=ss_get(f"t_{i}"), key=f"t_{i}",
+                                    min_value=0.0, format="%.2f")
+            with c4:
+                Fmax_kg = st.number_input("F_max (kg)", value=ss_get(f"Fmax_{i}"), key=f"Fmax_{i}",
+                                          min_value=0.0, format="%.3f")
 
-st.write("---")
-st.markdown(
-    """
-    <div style='text-align: center; font-size: 16px; padding-top: 10px;'>
-        <b>พัฒนาโดย:</b> รศ.ดร.อิทธิพล มีผล<br>
-        ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ (มจพ.)
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+            if L > 0 and b > 0 and t > 0 and Fmax_kg > 0:
+                Fmax_N = Fmax_kg * 9.80665
+                mor = calc_MOR(Fmax_N, L, b, t)
+                mor_results.append(mor)
+                store_result(f"mor_result_{i}", mor)
+                st.markdown(f'<div class="result-card">'
+                            f'<b>MOR ตัวอย่างที่ {i+1}</b> = <span style="font-size:22px;">'
+                            f'{mor:.2f}</span> MPa &nbsp; '
+                            f'<small>(F={Fmax_N:.2f} N)</small></div>',
+                            unsafe_allow_html=True)
+            else:
+                mor_results.append(None)
+                if any(v > 0 for v in [L, b, t, Fmax_kg]):
+                    st.warning("กรุณาใส่ค่า L, b, t, Fmax ให้ครบและมากกว่า 0")
 
+    # Summary
+    valid_mor = [v for v in mor_results if v is not None]
+    if len(valid_mor) >= 2:
+        stats = calc_statistics(valid_mor)
+        st.markdown("---")
+        st.markdown("##### 📊 MOR Summary")
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        with mc1:
+            st.markdown(f'<div class="metric-box"><div class="label">Mean</div>'
+                        f'<div class="value">{stats["mean"]:.2f}</div>'
+                        f'<div class="unit">MPa</div></div>', unsafe_allow_html=True)
+        with mc2:
+            st.markdown(f'<div class="metric-box"><div class="label">Std Dev</div>'
+                        f'<div class="value">{stats["sd"]:.2f}</div>'
+                        f'<div class="unit">MPa</div></div>', unsafe_allow_html=True)
+        with mc3:
+            st.markdown(f'<div class="metric-box"><div class="label">CV</div>'
+                        f'<div class="value">{stats["cv"]:.1f}</div>'
+                        f'<div class="unit">%</div></div>', unsafe_allow_html=True)
+        with mc4:
+            st.markdown(f'<div class="metric-box"><div class="label">N</div>'
+                        f'<div class="value">{stats["n"]}</div>'
+                        f'<div class="unit">samples</div></div>', unsafe_allow_html=True)
+        store_result("mor_stats", stats)
+    elif len(valid_mor) == 1:
+        store_result("mor_stats", {"n": 1, "mean": valid_mor[0], "sd": 0, "cv": 0,
+                                   "min": valid_mor[0], "max": valid_mor[0]})
+
+# =============================================================
+# TAB 2: MOE + Load-Deflection
+# =============================================================
+with tab_moe:
+    st.markdown('<div class="info-card">'
+                '<b>Modulus of Elasticity (MOE)</b> — จาก Load-Deflection curve<br>'
+                'MOE = (ΔF/Δδ) · L³ / (4·b·t³) &nbsp; [MPa]<br>'
+                '<small>คำนวณ slope จาก elastic region (10%–40% ของ F<sub>max</sub>) '
+                'ด้วย linear regression</small>'
+                '</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="warn-card">'
+                '⚠️ <b>หมายเหตุ:</b> MOE ควรคำนวณจาก slope ของ elastic region เท่านั้น '
+                'ไม่ใช่จาก F<sub>max</sub>/δ<sub>max</sub> ซึ่งรวม plastic deformation แล้ว'
+                '</div>', unsafe_allow_html=True)
+
+    # Template download
+    template = pd.DataFrame({"Load (kg)": [0, 5, 10, 15, 20, 25],
+                             "Deflection (mm)": [0.0, 0.8, 1.5, 2.3, 3.5, 5.0]})
+    buf_tpl = io.BytesIO()
+    template.to_excel(buf_tpl, index=False)
+    buf_tpl.seek(0)
+    st.download_button("📥 Download Template Excel", data=buf_tpl,
+                       file_name="load_deflection_template.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    uploaded_xl = st.file_uploader("อัปโหลดไฟล์ Excel (Load-Deflection)", type=["xlsx"])
+
+    if uploaded_xl:
+        try:
+            df = pd.read_excel(uploaded_xl)
+            if "Load (kg)" not in df.columns or "Deflection (mm)" not in df.columns:
+                st.error("❌ ไฟล์ต้องมีคอลัมน์ 'Load (kg)' และ 'Deflection (mm)'")
+            else:
+                df["Load (N)"] = df["Load (kg)"] * 9.80665
+                st.dataframe(df, use_container_width=True, height=200)
+
+                st.markdown("##### Geometry สำหรับ MOE")
+                gc1, gc2, gc3 = st.columns(3)
+                with gc1:
+                    L_moe = st.number_input("L (mm)", value=ss_get("L_moe", ss_get("L_0")),
+                                            key="L_moe", min_value=0.0, format="%.2f")
+                with gc2:
+                    b_moe = st.number_input("b (mm)", value=ss_get("b_moe", ss_get("b_0")),
+                                            key="b_moe", min_value=0.0, format="%.2f")
+                with gc3:
+                    t_moe = st.number_input("t (mm)", value=ss_get("t_moe", ss_get("t_0")),
+                                            key="t_moe", min_value=0.0, format="%.2f")
+
+                ec1, ec2 = st.columns(2)
+                with ec1:
+                    lower_pct = st.slider("Elastic range: lower %", 5, 30, 10, 5, key="el_lo") / 100
+                with ec2:
+                    upper_pct = st.slider("Elastic range: upper %", 20, 60, 40, 5, key="el_hi") / 100
+
+                if L_moe > 0 and b_moe > 0 and t_moe > 0:
+                    load_N = df["Load (N)"].values
+                    defl = df["Deflection (mm)"].values
+
+                    try:
+                        moe_el, slope, r_sq, idx_lo, idx_hi = calc_MOE_elastic(
+                            load_N, defl, L_moe, b_moe, t_moe, lower_pct, upper_pct)
+
+                        # Simple MOE for comparison
+                        Fmax_N_xl = load_N.max()
+                        ymax_xl = defl.max()
+                        moe_simple = calc_MOE_simple(Fmax_N_xl, ymax_xl, L_moe, b_moe, t_moe)
+
+                        store_result("moe_elastic", moe_el)
+                        store_result("moe_simple", moe_simple)
+                        store_result("moe_r2", r_sq)
+
+                        # Results
+                        rc1, rc2 = st.columns(2)
+                        with rc1:
+                            st.markdown(f'<div class="result-card">'
+                                        f'<b>MOE (Elastic Region)</b><br>'
+                                        f'<span style="font-size:24px;">{moe_el:.2f}</span> MPa<br>'
+                                        f'<small>Slope = {slope:.2f} N/mm &nbsp;|&nbsp; '
+                                        f'R² = {r_sq:.4f}</small></div>',
+                                        unsafe_allow_html=True)
+                        with rc2:
+                            st.markdown(f'<div class="summary-card">'
+                                        f'<b>MOE (Simple: Fmax/δmax)</b><br>'
+                                        f'<span style="font-size:24px;">{moe_simple:.2f}</span> MPa<br>'
+                                        f'<small>⚠️ รวม plastic deformation — '
+                                        f'ค่าต่ำกว่าวิธี elastic region</small></div>',
+                                        unsafe_allow_html=True)
+
+                        # Plot
+                        fig, ax = plt.subplots(figsize=(8, 5))
+                        fig.patch.set_facecolor('#fafbfe')
+                        ax.set_facecolor('#fafbfe')
+
+                        ax.plot(defl, load_N, 'o-', color='#3b82f6', linewidth=2,
+                                markersize=6, label='Test Data', zorder=3)
+
+                        # Elastic region highlight
+                        el_defl = defl[idx_lo:idx_hi+1]
+                        el_load = load_N[idx_lo:idx_hi+1]
+                        ax.plot(el_defl, el_load, 's', color='#10b981', markersize=10,
+                                label=f'Elastic Region ({int(lower_pct*100)}%-{int(upper_pct*100)}% Fmax)',
+                                zorder=4)
+
+                        # Linear fit line
+                        x_fit = np.linspace(0, defl.max() * 0.6, 100)
+                        y_fit = slope * x_fit + (np.polyfit(el_defl, el_load, 1)[1])
+                        ax.plot(x_fit, y_fit, '--', color='#ef4444', linewidth=1.5,
+                                label=f'Linear Fit (slope={slope:.1f} N/mm)', zorder=2)
+
+                        ax.set_xlabel("Deflection (mm)", fontsize=13, fontweight='bold')
+                        ax.set_ylabel("Load (N)", fontsize=13, fontweight='bold')
+                        ax.set_title("Load–Deflection Curve", fontsize=15, fontweight='bold')
+                        ax.legend(fontsize=10, loc='lower right')
+                        ax.grid(True, alpha=0.3)
+                        ax.spines[['top', 'right']].set_visible(False)
+
+                        st.pyplot(fig)
+                        store_result("moe_fig", fig)
+
+                    except Exception as e:
+                        st.error(f"❌ คำนวณ MOE ไม่ได้: {e}")
+                else:
+                    st.warning("กรุณาใส่ค่า L, b, t ให้มากกว่า 0")
+        except Exception as e:
+            st.error(f"❌ อ่านไฟล์ Excel ไม่ได้: {e}")
+
+# =============================================================
+# TAB 3: Thickness Swelling
+# =============================================================
+with tab_ts:
+    st.markdown('<div class="info-card">'
+                '<b>Thickness Swelling (TS)</b> — วัดความหนา 4 ด้าน ก่อน/หลังแช่น้ำ<br>'
+                'TS = (t<sub>after</sub> − t<sub>before</sub>) / t<sub>before</sub> × 100 &nbsp; [%]'
+                '</div>', unsafe_allow_html=True)
+
+    num_ts = st.selectbox("จำนวนตัวอย่าง TS", [1, 2, 3, 4],
+                          index=[1,2,3,4].index(int(ss_get("num_ts_samples", 1))),
+                          key="num_ts_samples")
+
+    ts_results = []
+
+    for j in range(num_ts):
+        with st.expander(f"📐 TS ตัวอย่างที่ {j+1}", expanded=(j == 0)):
+            st.markdown("**ก่อนแช่น้ำ (mm)**")
+            bc1, bc2, bc3, bc4 = st.columns(4)
+            before = []
+            for side, col in enumerate([bc1, bc2, bc3, bc4], 1):
+                with col:
+                    v = st.number_input(f"ด้าน {side}", value=ss_get(f"ts_b{side}_{j}"),
+                                        key=f"ts_b{side}_{j}", min_value=0.0, format="%.3f")
+                    before.append(v)
+
+            st.markdown("**หลังแช่น้ำ (mm)**")
+            ac1, ac2, ac3, ac4 = st.columns(4)
+            after = []
+            for side, col in enumerate([ac1, ac2, ac3, ac4], 1):
+                with col:
+                    v = st.number_input(f"ด้าน {side} ", value=ss_get(f"ts_a{side}_{j}"),
+                                        key=f"ts_a{side}_{j}", min_value=0.0, format="%.3f")
+                    after.append(v)
+
+            if all(v > 0 for v in before) and all(v > 0 for v in after):
+                avg_b, avg_a, ts = calc_TS(before, after)
+                ts_results.append(ts)
+                store_result(f"ts_result_{j}", ts)
+                store_result(f"ts_avg_before_{j}", avg_b)
+                store_result(f"ts_avg_after_{j}", avg_a)
+                st.markdown(f'<div class="result-card">'
+                            f'<b>TS ตัวอย่างที่ {j+1}</b> = '
+                            f'<span style="font-size:22px;">{ts:.2f}</span> %<br>'
+                            f'<small>Avg before = {avg_b:.3f} mm &nbsp;|&nbsp; '
+                            f'Avg after = {avg_a:.3f} mm</small></div>',
+                            unsafe_allow_html=True)
+            else:
+                ts_results.append(None)
+
+    valid_ts = [v for v in ts_results if v is not None]
+    if len(valid_ts) >= 2:
+        ts_stats = calc_statistics(valid_ts)
+        st.markdown("---")
+        st.markdown("##### 📊 TS Summary")
+        tc1, tc2, tc3, tc4 = st.columns(4)
+        with tc1:
+            st.markdown(f'<div class="metric-box"><div class="label">Mean</div>'
+                        f'<div class="value">{ts_stats["mean"]:.2f}</div>'
+                        f'<div class="unit">%</div></div>', unsafe_allow_html=True)
+        with tc2:
+            st.markdown(f'<div class="metric-box"><div class="label">Std Dev</div>'
+                        f'<div class="value">{ts_stats["sd"]:.2f}</div>'
+                        f'<div class="unit">%</div></div>', unsafe_allow_html=True)
+        with tc3:
+            st.markdown(f'<div class="metric-box"><div class="label">CV</div>'
+                        f'<div class="value">{ts_stats["cv"]:.1f}</div>'
+                        f'<div class="unit">%</div></div>', unsafe_allow_html=True)
+        with tc4:
+            st.markdown(f'<div class="metric-box"><div class="label">N</div>'
+                        f'<div class="value">{ts_stats["n"]}</div>'
+                        f'<div class="unit">samples</div></div>', unsafe_allow_html=True)
+        store_result("ts_stats", ts_stats)
+
+# =============================================================
+# TAB 4: Summary
+# =============================================================
+with tab_summary:
+    st.markdown("### 📊 Summary Table")
+
+    # MOR table
+    mor_data = []
+    for i in range(int(ss_get("num_samples", 1))):
+        v = ss_get(f"mor_result_{i}", None)
+        if v is not None and v > 0:
+            mor_data.append({
+                "Sample": f"#{i+1}",
+                "L (mm)": ss_get(f"L_{i}"),
+                "b (mm)": ss_get(f"b_{i}"),
+                "t (mm)": ss_get(f"t_{i}"),
+                "Fmax (kg)": ss_get(f"Fmax_{i}"),
+                "MOR (MPa)": round(v, 2),
+            })
+
+    if mor_data:
+        st.markdown("##### MOR Results")
+        df_mor = pd.DataFrame(mor_data)
+        st.dataframe(df_mor, use_container_width=True, hide_index=True)
+        mor_s = ss_get("mor_stats", {})
+        if mor_s:
+            st.markdown(f'<div class="summary-card">'
+                        f'<b>MOR:</b> Mean = {mor_s.get("mean",0):.2f} MPa &nbsp;|&nbsp; '
+                        f'SD = {mor_s.get("sd",0):.2f} MPa &nbsp;|&nbsp; '
+                        f'CV = {mor_s.get("cv",0):.1f}%</div>',
+                        unsafe_allow_html=True)
+
+    # MOE
+    moe_el = ss_get("moe_elastic", None)
+    if moe_el:
+        st.markdown("##### MOE Results")
+        st.markdown(f'<div class="summary-card">'
+                    f'<b>MOE (Elastic):</b> {moe_el:.2f} MPa &nbsp;|&nbsp; '
+                    f'R² = {ss_get("moe_r2", 0):.4f}<br>'
+                    f'<b>MOE (Simple):</b> {ss_get("moe_simple", 0):.2f} MPa</div>',
+                    unsafe_allow_html=True)
+
+    # TS table
+    ts_data = []
+    for j in range(int(ss_get("num_ts_samples", 1))):
+        v = ss_get(f"ts_result_{j}", None)
+        if v is not None:
+            ts_data.append({
+                "Sample": f"#{j+1}",
+                "Avg Before (mm)": round(ss_get(f"ts_avg_before_{j}", 0), 3),
+                "Avg After (mm)": round(ss_get(f"ts_avg_after_{j}", 0), 3),
+                "TS (%)": round(v, 2),
+            })
+
+    if ts_data:
+        st.markdown("##### Thickness Swelling Results")
+        df_ts = pd.DataFrame(ts_data)
+        st.dataframe(df_ts, use_container_width=True, hide_index=True)
+        ts_s = ss_get("ts_stats", {})
+        if ts_s and ts_s.get("n", 0) >= 2:
+            st.markdown(f'<div class="summary-card">'
+                        f'<b>TS:</b> Mean = {ts_s.get("mean",0):.2f}% &nbsp;|&nbsp; '
+                        f'SD = {ts_s.get("sd",0):.2f}% &nbsp;|&nbsp; '
+                        f'CV = {ts_s.get("cv",0):.1f}%</div>',
+                        unsafe_allow_html=True)
+
+    if not mor_data and not moe_el and not ts_data:
+        st.info("ยังไม่มีผลลัพธ์ — กรุณาใส่ข้อมูลใน Tab ① ② ③ ก่อน")
+
+# =============================================================
+# TAB 5: Export
+# =============================================================
+with tab_export:
+    st.markdown("### 📤 Export Report")
+
+    exp_col1, exp_col2 = st.columns(2)
+
+    # --- Excel Export ---
+    with exp_col1:
+        st.markdown("##### 📊 Excel Report")
+        if st.button("สร้างไฟล์ Excel", use_container_width=True):
+            with io.BytesIO() as buf:
+                with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+                    # MOR sheet
+                    if mor_data:
+                        df_m = pd.DataFrame(mor_data)
+                        mor_s = ss_get("mor_stats", {})
+                        if mor_s and mor_s.get("n", 0) >= 1:
+                            summary_row = {"Sample": "Summary", "MOR (MPa)": round(mor_s["mean"], 2)}
+                            df_m = pd.concat([df_m, pd.DataFrame([summary_row])], ignore_index=True)
+                        df_m.to_excel(writer, sheet_name="MOR", index=False)
+
+                    # TS sheet
+                    if ts_data:
+                        df_t = pd.DataFrame(ts_data)
+                        df_t.to_excel(writer, sheet_name="TS", index=False)
+
+                    # MOE sheet
+                    moe_el_v = ss_get("moe_elastic", None)
+                    if moe_el_v:
+                        df_moe = pd.DataFrame([{
+                            "MOE_Elastic (MPa)": round(moe_el_v, 2),
+                            "R²": round(ss_get("moe_r2", 0), 4),
+                            "MOE_Simple (MPa)": round(ss_get("moe_simple", 0), 2),
+                        }])
+                        df_moe.to_excel(writer, sheet_name="MOE", index=False)
+
+                buf.seek(0)
+                st.download_button("📥 Download Excel", data=buf.getvalue(),
+                                   file_name="particleboard_report.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    # --- Word Export ---
+    with exp_col2:
+        st.markdown("##### 📄 Word Report")
+        if st.button("สร้าง Word Report", use_container_width=True):
+            try:
+                doc = Document()
+
+                # Title
+                title_para = doc.add_heading("Particleboard Bending Test Report", level=1)
+                doc.add_paragraph(f"Standard: {ss_get('standard_ref', 'N/A')}")
+                doc.add_paragraph("")
+
+                # MOR section
+                if mor_data:
+                    doc.add_heading("1. Modulus of Rupture (MOR)", level=2)
+                    doc.add_paragraph("MOR = 3·Fmax·L / (2·b·t²)  [MPa]")
+
+                    table = doc.add_table(rows=1, cols=6, style='Light Shading Accent 1')
+                    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+                    headers = ["Sample", "L (mm)", "b (mm)", "t (mm)", "Fmax (kg)", "MOR (MPa)"]
+                    for idx_h, h in enumerate(headers):
+                        table.rows[0].cells[idx_h].text = h
+
+                    for row_data in mor_data:
+                        row = table.add_row()
+                        row.cells[0].text = str(row_data["Sample"])
+                        row.cells[1].text = f'{row_data["L (mm)"]:.2f}'
+                        row.cells[2].text = f'{row_data["b (mm)"]:.2f}'
+                        row.cells[3].text = f'{row_data["t (mm)"]:.2f}'
+                        row.cells[4].text = f'{row_data["Fmax (kg)"]:.3f}'
+                        row.cells[5].text = f'{row_data["MOR (MPa)"]:.2f}'
+
+                    mor_s = ss_get("mor_stats", {})
+                    if mor_s and mor_s.get("n", 0) >= 2:
+                        doc.add_paragraph(
+                            f'Mean = {mor_s["mean"]:.2f} MPa  |  '
+                            f'SD = {mor_s["sd"]:.2f} MPa  |  '
+                            f'CV = {mor_s["cv"]:.1f}%')
+
+                # MOE section
+                moe_el_v = ss_get("moe_elastic", None)
+                if moe_el_v:
+                    doc.add_heading("2. Modulus of Elasticity (MOE)", level=2)
+                    doc.add_paragraph(
+                        f'MOE (Elastic Region) = {moe_el_v:.2f} MPa  |  '
+                        f'R² = {ss_get("moe_r2", 0):.4f}')
+                    doc.add_paragraph(
+                        f'MOE (Simple: Fmax/δmax) = {ss_get("moe_simple", 0):.2f} MPa')
+
+                # TS section
+                if ts_data:
+                    doc.add_heading("3. Thickness Swelling (TS)", level=2)
+                    table2 = doc.add_table(rows=1, cols=4, style='Light Shading Accent 1')
+                    table2.alignment = WD_TABLE_ALIGNMENT.CENTER
+                    for idx_h, h in enumerate(["Sample", "Avg Before (mm)",
+                                               "Avg After (mm)", "TS (%)"]):
+                        table2.rows[0].cells[idx_h].text = h
+                    for row_data in ts_data:
+                        row = table2.add_row()
+                        row.cells[0].text = str(row_data["Sample"])
+                        row.cells[1].text = f'{row_data["Avg Before (mm)"]:.3f}'
+                        row.cells[2].text = f'{row_data["Avg After (mm)"]:.3f}'
+                        row.cells[3].text = f'{row_data["TS (%)"]:.2f}'
+
+                    ts_s = ss_get("ts_stats", {})
+                    if ts_s and ts_s.get("n", 0) >= 2:
+                        doc.add_paragraph(
+                            f'Mean = {ts_s["mean"]:.2f}%  |  '
+                            f'SD = {ts_s["sd"]:.2f}%  |  '
+                            f'CV = {ts_s["cv"]:.1f}%')
+
+                # Footer
+                doc.add_paragraph("")
+                footer_p = doc.add_paragraph()
+                footer_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = footer_p.add_run(
+                    "พัฒนาโดย: รศ.ดร.อิทธิพล มีผล\n"
+                    "ภาควิชาครุศาสตร์โยธา มจพ.")
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(100, 100, 100)
+
+                buf_doc = io.BytesIO()
+                doc.save(buf_doc)
+                buf_doc.seek(0)
+
+                st.download_button("📥 Download Word", data=buf_doc.getvalue(),
+                                   file_name="particleboard_report.docx",
+                                   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+            except Exception as e:
+                st.error(f"❌ ไม่สามารถสร้าง Word report ได้: {e}")
+
+# =============================================================
+# Footer
+# =============================================================
+st.markdown("""
+<div class="footer">
+    <b>พัฒนาโดย:</b> รศ.ดร.อิทธิพล มีผล<br>
+    ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ (มจพ.)
+</div>
+""", unsafe_allow_html=True)
