@@ -423,17 +423,39 @@ def page_equipment():
                                 with open(img_path, "wb") as fp:
                                     fp.write(uploaded.getbuffer())
                             if existing is None:
+                                # เพิ่มใหม่ available = total
                                 execute("""INSERT INTO equipment
                                     (code,name,category,total_qty,available_qty,status,image_path,description)
                                     VALUES (?,?,?,?,?,?,?,?)""",
                                     (code, name, category, total_qty, total_qty, status_sel, img_path, description))
                                 st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                                st.rerun()
                             else:
-                                execute("""UPDATE equipment SET code=?,name=?,category=?,total_qty=?,
-                                    status=?,image_path=?,description=? WHERE id=?""",
-                                    (code, name, category, total_qty, status_sel, img_path, description, eq_id))
-                                st.success("✅ อัปเดตเรียบร้อย")
-                            st.rerun()
+                                # คำนวณ available_qty ใหม่ตามส่วนต่าง
+                                old_total     = int(existing["total_qty"])
+                                old_available = int(existing["available_qty"])
+                                borrowed      = old_total - old_available  # จำนวนที่ยืมออกอยู่
+                                diff          = total_qty - old_total      # ส่วนต่างที่เปลี่ยน
+                                new_available = old_available + diff
+
+                                if new_available < 0:
+                                    st.error(
+                                        f"❌ ลดจำนวนไม่ได้! ขณะนี้ยืมออกอยู่ {borrowed} ชิ้น "
+                                        f"ลดได้สูงสุดเหลือ {borrowed} ชิ้น (จาก {old_total} → {borrowed})"
+                                    )
+                                else:
+                                    execute("""UPDATE equipment SET code=?,name=?,category=?,
+                                        total_qty=?,available_qty=?,status=?,image_path=?,description=?
+                                        WHERE id=?""",
+                                        (code, name, category, total_qty, new_available,
+                                         status_sel, img_path, description, eq_id))
+                                    if diff > 0:
+                                        st.success(f"✅ อัปเดตเรียบร้อย เพิ่มจำนวน +{diff} ชิ้น (พร้อมใช้: {new_available})")
+                                    elif diff < 0:
+                                        st.success(f"✅ อัปเดตเรียบร้อย ลดจำนวน {diff} ชิ้น (พร้อมใช้: {new_available})")
+                                    else:
+                                        st.success("✅ อัปเดตเรียบร้อย")
+                                    st.rerun()
                         except Exception as e:
                             st.error(f"❌ เกิดข้อผิดพลาด: {e}")
     else:
