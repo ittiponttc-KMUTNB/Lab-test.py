@@ -229,12 +229,28 @@ def nav():
         if n_over > 0:
             st.error(f"⚠️ เกินกำหนด {n_over} รายการ")
 
-    # Top nav bar — icon only (เหมาะมือถือ)
-    cols = st.columns(len(PAGES))
-    for i, (icon, name) in enumerate(PAGES):
+    # ── ชื่อโปรแกรม ─────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="text-align:center; margin-bottom:10px;">
+        <span style="font-size:1.4rem; font-weight:700; color:#1F4E79;">
+            🔬 ระบบบริหารจัดการห้องปฏิบัติการ TTC
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Top nav bar — icon + ชื่อ ────────────────────────────────────────────
+    NAV_ITEMS = [
+        ("Dashboard", "🏠", "หน้าหลัก"),
+        ("อุปกรณ์",   "📦", "อุปกรณ์"),
+        ("เบิก",      "➕", "เบิก"),
+        ("คืน",       "✅", "คืน"),
+        ("รายงาน",    "📋", "รายงาน"),
+    ]
+    cols = st.columns(len(NAV_ITEMS))
+    for i, (name, icon, label) in enumerate(NAV_ITEMS):
         active = st.session_state.page == name
         with cols[i]:
-            if st.button(icon, key=f"tnav_{name}",
+            if st.button(f"{icon}\n{label}", key=f"tnav_{name}",
                          type="primary" if active else "secondary",
                          use_container_width=True):
                 st.session_state.page = name
