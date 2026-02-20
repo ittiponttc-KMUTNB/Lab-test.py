@@ -381,121 +381,107 @@ def page_equipment():
 
     if is_admin():
         st.markdown('<div class="section-header">➕ เพิ่ม / แก้ไขอุปกรณ์</div>', unsafe_allow_html=True)
+
         eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
         options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
 
-        # รับค่าจาก _next_sel (ตั้งก่อน rerun) แล้วโอนไป eq_edit_sel ก่อน render
         if "_next_sel" in st.session_state:
             st.session_state["eq_edit_sel"] = st.session_state.pop("_next_sel")
 
         choice = st.selectbox("เลือกรายการ", options, key="eq_edit_sel")
 
+        # โหลดข้อมูลจาก DB ตาม choice
         existing, eq_id = None, None
         if choice != "➕ เพิ่มใหม่":
-            # ดึง code จากชื่อที่เลือก แล้วค้นหาจาก DB โดยตรง ไม่ใช้ index
             try:
-                selected_code = choice.split(" — ")[0].strip()
-                eq_data = query("SELECT * FROM equipment WHERE code=?", (selected_code,))
+                sel_code = choice.split(" — ")[0].strip()
+                eq_data  = query("SELECT * FROM equipment WHERE code=?", (sel_code,))
                 if not eq_data.empty:
                     existing = eq_data.iloc[0]
-                    eq_id    = existing["id"]
+                    eq_id    = int(existing["id"])
                 else:
-                    st.warning("⚠️ ไม่พบอุปกรณ์นี้ในระบบ กรุณาเลือกรายการใหม่")
-                    existing = None
-            except Exception:
-                st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกรายการใหม่อีกครั้ง")
-                existing = None
+                    st.warning("⚠️ ไม่พบอุปกรณ์นี้ กรุณาเลือกใหม่")
+            except:
+                st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกใหม่")
 
-        # ── แสดงข้อมูลปัจจุบัน ─────────────────────────────────────────────────
         if existing is not None:
             borrowed_now = int(existing["total_qty"]) - int(existing["available_qty"])
             st.markdown(
                 f'<div class="eq-card" style="border-left:4px solid #1F4E79;">'
-                f'📊 <b>ข้อมูลปัจจุบัน:</b> &nbsp;'
+                f'📊 <b>ข้อมูลปัจจุบัน:</b> '
                 f'ทั้งหมด <b>{existing["total_qty"]}</b> | '
                 f'พร้อมใช้ <b>{existing["available_qty"]}</b> | '
                 f'ยืมออก <b>{borrowed_now}</b>'
                 f'</div>', unsafe_allow_html=True)
 
-        # ── ฟอร์มโดยไม่ใช้ st.form (หลีกเลี่ยงปัญหา cache) ─────────────────
-        # ใช้ key ที่ผูกกับ eq_id ทำให้ widget สร้างใหม่เมื่อเปลี่ยน item
-        fk = str(eq_id) if eq_id else "new"
+        # ใช้ st.form พร้อม key ที่เปลี่ยนตาม choice เพื่อ force refresh ทุกครั้ง
+        form_key = f"frm_{eq_id if eq_id else 'new'}"
+        with st.form(key=form_key):
+            sv_code = st.text_input("รหัสอุปกรณ์ *",
+                value=str(existing["code"]) if existing is not None else "")
+            sv_name = st.text_input("ชื่ออุปกรณ์ *",
+                value=str(existing["name"]) if existing is not None else "")
+            sv_cat  = st.text_input("หมวดหมู่",
+                value=str(existing["category"] or "") if existing is not None else "")
+            sv_qty  = st.number_input("จำนวนทั้งหมด", min_value=1,
+                value=int(existing["total_qty"]) if existing is not None else 1)
+            sv_stat = st.selectbox("สถานะ", ["พร้อมใช้","ชำรุด","สูญหาย"],
+                index=["พร้อมใช้","ชำรุด","สูญหาย"].index(str(existing["status"]))
+                      if existing is not None else 0)
+            sv_desc = st.text_area("รายละเอียด",
+                value=str(existing["description"] or "") if existing is not None else "")
+            sv_img  = st.file_uploader("📷 รูปอุปกรณ์ (optional)", type=["jpg","jpeg","png"])
 
-        inp_code  = st.text_input("รหัสอุปกรณ์ *",
-                        value=existing["code"] if existing is not None else "",
-                        key=f"inp_code_{fk}")
-        inp_name  = st.text_input("ชื่ออุปกรณ์ *",
-                        value=existing["name"] if existing is not None else "",
-                        key=f"inp_name_{fk}")
-        inp_cat   = st.text_input("หมวดหมู่",
-                        value=existing["category"] if existing is not None else "",
-                        key=f"inp_cat_{fk}")
-        inp_qty   = st.number_input("จำนวนทั้งหมด", min_value=1,
-                        value=int(existing["total_qty"]) if existing is not None else 1,
-                        key=f"inp_qty_{fk}")
-        inp_stat  = st.selectbox("สถานะ", ["พร้อมใช้","ชำรุด","สูญหาย"],
-                        index=["พร้อมใช้","ชำรุด","สูญหาย"].index(existing["status"])
-                                if existing is not None else 0,
-                        key=f"inp_stat_{fk}")
-        inp_desc  = st.text_area("รายละเอียด",
-                        value=existing["description"] if existing is not None else "",
-                        key=f"inp_desc_{fk}")
-        inp_img   = st.file_uploader("📷 รูปอุปกรณ์ (optional)",
-                        type=["jpg","jpeg","png"], key=f"inp_img_{fk}")
+            if existing is not None and existing["image_path"] and os.path.exists(str(existing["image_path"])):
+                st.caption("รูปปัจจุบัน:")
+                show_image(existing["image_path"], width=80)
 
-        if existing is not None and existing["image_path"] and os.path.exists(existing["image_path"]):
-            st.caption("รูปปัจจุบัน:")
-            show_image(existing["image_path"], width=80)
+            submitted = st.form_submit_button("💾 บันทึก", type="primary", use_container_width=True)
 
-        if st.button("💾 บันทึก", type="primary", use_container_width=True, key=f"btn_save_{fk}"):
-            if not inp_code or not inp_name:
+        if submitted:
+            sv_code = sv_code.strip()
+            sv_name = sv_name.strip()
+            if not sv_code or not sv_name:
                 st.error("กรุณากรอกรหัสและชื่ออุปกรณ์")
             else:
-                dup = query("SELECT id FROM equipment WHERE code=?", (inp_code,))
-                cur_id = int(eq_id) if existing is not None else -1
-                if not dup.empty and (existing is None or int(dup.iloc[0]["id"]) != cur_id):
-                    st.error(f"❌ รหัส '{inp_code}' มีอยู่แล้ว กรุณาใช้รหัสอื่น")
+                dup    = query("SELECT id FROM equipment WHERE code=?", (sv_code,))
+                cur_id = eq_id if eq_id else -1
+                if not dup.empty and (eq_id is None or int(dup.iloc[0]["id"]) != cur_id):
+                    st.error(f"❌ รหัส '{sv_code}' มีอยู่แล้ว")
                 else:
                     try:
-                        img_path = existing["image_path"] if existing is not None else None
-                        if inp_img:
-                            ext = inp_img.name.split(".")[-1]
-                            img_path = os.path.join(IMG_DIR, f"{inp_code}.{ext}")
+                        img_path = str(existing["image_path"]) if existing is not None and existing["image_path"] else None
+                        if sv_img:
+                            ext = sv_img.name.split(".")[-1]
+                            img_path = os.path.join(IMG_DIR, f"{sv_code}.{ext}")
                             with open(img_path, "wb") as fp:
-                                fp.write(inp_img.getbuffer())
+                                fp.write(sv_img.getbuffer())
                         if existing is None:
                             execute("""INSERT INTO equipment
                                 (code,name,category,total_qty,available_qty,status,image_path,description)
                                 VALUES (?,?,?,?,?,?,?,?)""",
-                                (inp_code, inp_name, inp_cat, inp_qty, inp_qty,
-                                 inp_stat, img_path, inp_desc))
+                                (sv_code,sv_name,sv_cat,sv_qty,sv_qty,sv_stat,img_path,sv_desc))
                             st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
                             st.session_state["_next_sel"] = "➕ เพิ่มใหม่"
-                            st.rerun()
                         else:
                             old_total     = int(existing["total_qty"])
                             old_available = int(existing["available_qty"])
                             borrowed      = old_total - old_available
-                            diff          = inp_qty - old_total
+                            diff          = int(sv_qty) - old_total
                             new_available = old_available + diff
                             if new_available < 0:
-                                st.error(
-                                    f"❌ ลดจำนวนไม่ได้! ยืมออกอยู่ {borrowed} ชิ้น "
-                                    f"ลดได้สูงสุดเหลือ {borrowed} ชิ้น"
-                                )
-                            else:
-                                execute("""UPDATE equipment SET code=?,name=?,category=?,
-                                    total_qty=?,available_qty=?,status=?,image_path=?,description=?
-                                    WHERE id=?""",
-                                    (inp_code, inp_name, inp_cat, inp_qty, new_available,
-                                     inp_stat, img_path, inp_desc, eq_id))
-                                msg = "✅ อัปเดตเรียบร้อย"
-                                if diff > 0:   msg += f" (เพิ่ม +{diff} พร้อมใช้: {new_available})"
-                                elif diff < 0: msg += f" (ลด {diff} พร้อมใช้: {new_available})"
-                                st.success(msg)
-                                # refresh ฟอร์มด้วย code ใหม่
-                                st.session_state["_next_sel"] = f"{inp_code} — {inp_name}"
-                                st.rerun()
+                                st.error(f"❌ ลดจำนวนไม่ได้! ยืมออกอยู่ {borrowed} ชิ้น ลดได้สูงสุดเหลือ {borrowed} ชิ้น")
+                                st.stop()
+                            execute("""UPDATE equipment SET code=?,name=?,category=?,
+                                total_qty=?,available_qty=?,status=?,image_path=?,description=?
+                                WHERE id=?""",
+                                (sv_code,sv_name,sv_cat,sv_qty,new_available,sv_stat,img_path,sv_desc,eq_id))
+                            msg = "✅ อัปเดตเรียบร้อย"
+                            if diff > 0:   msg += f" เพิ่ม +{diff} (พร้อมใช้: {new_available})"
+                            elif diff < 0: msg += f" ลด {diff} (พร้อมใช้: {new_available})"
+                            st.success(msg)
+                            st.session_state["_next_sel"] = f"{sv_code} — {sv_name}"
+                        st.rerun()
                     except Exception as e:
                         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
     else:
