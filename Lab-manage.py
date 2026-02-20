@@ -376,8 +376,19 @@ def page_equipment():
 
         existing, eq_id = None, None
         if choice != "➕ เพิ่มใหม่":
-            eq_id    = eq_list.iloc[options.index(choice) - 1]["id"]
-            existing = query("SELECT * FROM equipment WHERE id=?", (eq_id,)).iloc[0]
+            try:
+                idx = options.index(choice) - 1
+                if idx >= 0 and idx < len(eq_list):
+                    eq_id   = eq_list.iloc[idx]["id"]
+                    eq_data = query("SELECT * FROM equipment WHERE id=?", (eq_id,))
+                    if not eq_data.empty:
+                        existing = eq_data.iloc[0]
+                    else:
+                        st.warning("⚠️ ไม่พบอุปกรณ์นี้ในระบบ กรุณาเลือกรายการใหม่")
+                        existing = None
+            except (ValueError, IndexError):
+                st.warning("⚠️ เกิดข้อผิดพลาดในการเลือกอุปกรณ์ กรุณาเลือกใหม่อีกครั้ง")
+                existing = None
 
         with st.form("eq_form", clear_on_submit=True):
             code        = st.text_input("รหัสอุปกรณ์ *", value=existing["code"]        if existing is not None else "")
