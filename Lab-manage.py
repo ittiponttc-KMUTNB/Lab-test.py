@@ -258,7 +258,7 @@ def nav():
 
 # ─── PAGE: DASHBOARD ──────────────────────────────────────────────────────────
 def page_dashboard():
-    st.markdown("## 🏠 ภาพรวม")
+    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">🏠 ภาพรวม</p>', unsafe_allow_html=True)
 
     total_eq  = query("SELECT COUNT(*) as n FROM equipment").iloc[0]["n"]
     available = query("SELECT COALESCE(SUM(available_qty),0) as n FROM equipment").iloc[0]["n"]
@@ -317,7 +317,7 @@ def page_dashboard():
 
 # ─── PAGE: EQUIPMENT ──────────────────────────────────────────────────────────
 def page_equipment():
-    st.markdown("## 📦 รายการอุปกรณ์")
+    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">📦 รายการอุปกรณ์</p>', unsafe_allow_html=True)
 
     search = st.text_input("🔍 ค้นหา ชื่อ / รหัส / หมวดหมู่", placeholder="พิมพ์เพื่อค้นหา...")
     cats   = query("SELECT DISTINCT category FROM equipment WHERE category IS NOT NULL ORDER BY category")
@@ -429,7 +429,7 @@ def page_equipment():
 
 # ─── PAGE: BORROW ─────────────────────────────────────────────────────────────
 def page_borrow():
-    st.markdown("## ➕ เบิกอุปกรณ์")
+    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">➕ เบิกอุปกรณ์</p>', unsafe_allow_html=True)
 
     avail = query("""SELECT id, code, name, category, available_qty, image_path, description
                      FROM equipment WHERE available_qty > 0 AND status='พร้อมใช้'
@@ -524,7 +524,7 @@ def page_borrow():
 
 # ─── PAGE: RETURN ─────────────────────────────────────────────────────────────
 def page_return():
-    st.markdown("## ✅ คืนอุปกรณ์")
+    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">✅ คืนอุปกรณ์</p>', unsafe_allow_html=True)
 
     search = st.text_input("🔍 ค้นหาชื่อผู้ยืม / รหัส / ชื่ออุปกรณ์",
                             placeholder="พิมพ์เพื่อค้นหา...")
@@ -594,7 +594,7 @@ def page_return():
 
 # ─── PAGE: REPORT ─────────────────────────────────────────────────────────────
 def page_report():
-    st.markdown("## 📋 รายงาน")
+    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">📋 รายงาน</p>', unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs(["ประวัติการเบิก-คืน", "สรุปอุปกรณ์"])
 
