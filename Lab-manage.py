@@ -376,18 +376,18 @@ def page_equipment():
 
         existing, eq_id = None, None
         if choice != "➕ เพิ่มใหม่":
+            # ดึง code จากชื่อที่เลือก แล้วค้นหาจาก DB โดยตรง ไม่ใช้ index
             try:
-                idx = options.index(choice) - 1
-                if idx >= 0 and idx < len(eq_list):
-                    eq_id   = eq_list.iloc[idx]["id"]
-                    eq_data = query("SELECT * FROM equipment WHERE id=?", (eq_id,))
-                    if not eq_data.empty:
-                        existing = eq_data.iloc[0]
-                    else:
-                        st.warning("⚠️ ไม่พบอุปกรณ์นี้ในระบบ กรุณาเลือกรายการใหม่")
-                        existing = None
-            except (ValueError, IndexError):
-                st.warning("⚠️ เกิดข้อผิดพลาดในการเลือกอุปกรณ์ กรุณาเลือกใหม่อีกครั้ง")
+                selected_code = choice.split(" — ")[0].strip()
+                eq_data = query("SELECT * FROM equipment WHERE code=?", (selected_code,))
+                if not eq_data.empty:
+                    existing = eq_data.iloc[0]
+                    eq_id    = existing["id"]
+                else:
+                    st.warning("⚠️ ไม่พบอุปกรณ์นี้ในระบบ กรุณาเลือกรายการใหม่")
+                    existing = None
+            except Exception:
+                st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกรายการใหม่อีกครั้ง")
                 existing = None
 
         with st.form("eq_form", clear_on_submit=True):
