@@ -361,10 +361,10 @@ def page_equipment():
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
                     if st.button("✏️ แก้ไข", key=f"edit_{r['id']}", use_container_width=True):
-                        # หา index ของ option ที่ตรงกับ code นี้
+                        # set เป็น string value ของ option (ไม่ใช่ integer index)
                         eq_list_tmp = query("SELECT code, name FROM equipment ORDER BY code")
                         opts_tmp = ["➕ เพิ่มใหม่"] + [f"{x['code']} — {x['name']}" for _, x in eq_list_tmp.iterrows()]
-                        matched_tmp = [i for i, o in enumerate(opts_tmp) if o.startswith(r["code"] + " —")]
+                        matched_tmp = [o for o in opts_tmp if o.startswith(r["code"] + " —")]
                         if matched_tmp:
                             st.session_state["eq_edit_sel"] = matched_tmp[0]
                         st.rerun()
