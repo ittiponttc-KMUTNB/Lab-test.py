@@ -406,7 +406,7 @@ def page_equipment():
                 st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกรายการใหม่อีกครั้ง")
                 existing = None
 
-        # แสดงข้อมูลปัจจุบันก่อนฟอร์ม
+        # ── แสดงข้อมูลปัจจุบัน ─────────────────────────────────────────────────
         if existing is not None:
             borrowed_now = int(existing["total_qty"]) - int(existing["available_qty"])
             st.markdown(
@@ -417,76 +417,87 @@ def page_equipment():
                 f'ยืมออก <b>{borrowed_now}</b>'
                 f'</div>', unsafe_allow_html=True)
 
-        # key ของฟอร์มเปลี่ยนตาม eq_id → Streamlit สร้าง widget ใหม่ทุกครั้งที่เปลี่ยน item
-        form_key = f"eq_form_{eq_id if eq_id else 'new'}"
-        with st.form(form_key, clear_on_submit=False):
-            code        = st.text_input("รหัสอุปกรณ์ *", value=existing["code"]        if existing is not None else "")
-            name        = st.text_input("ชื่ออุปกรณ์ *",  value=existing["name"]        if existing is not None else "")
-            category    = st.text_input("หมวดหมู่",        value=existing["category"]    if existing is not None else "")
-            total_qty   = st.number_input("จำนวนทั้งหมด", min_value=1,
-                                          value=int(existing["total_qty"]) if existing is not None else 1)
-            status_sel  = st.selectbox("สถานะ", ["พร้อมใช้","ชำรุด","สูญหาย"],
-                                       index=["พร้อมใช้","ชำรุด","สูญหาย"].index(existing["status"])
-                                       if existing is not None else 0)
-            description = st.text_area("รายละเอียด", value=existing["description"] if existing is not None else "")
-            uploaded    = st.file_uploader("📷 รูปอุปกรณ์ (optional)", type=["jpg","jpeg","png"])
+        # ── ฟอร์มโดยไม่ใช้ st.form (หลีกเลี่ยงปัญหา cache) ─────────────────
+        # ใช้ key ที่ผูกกับ eq_id ทำให้ widget สร้างใหม่เมื่อเปลี่ยน item
+        fk = str(eq_id) if eq_id else "new"
 
-            if existing is not None and existing["image_path"] and os.path.exists(existing["image_path"]):
-                st.caption("รูปปัจจุบัน:")
-                show_image(existing["image_path"], width=80)
+        inp_code  = st.text_input("รหัสอุปกรณ์ *",
+                        value=existing["code"] if existing is not None else "",
+                        key=f"inp_code_{fk}")
+        inp_name  = st.text_input("ชื่ออุปกรณ์ *",
+                        value=existing["name"] if existing is not None else "",
+                        key=f"inp_name_{fk}")
+        inp_cat   = st.text_input("หมวดหมู่",
+                        value=existing["category"] if existing is not None else "",
+                        key=f"inp_cat_{fk}")
+        inp_qty   = st.number_input("จำนวนทั้งหมด", min_value=1,
+                        value=int(existing["total_qty"]) if existing is not None else 1,
+                        key=f"inp_qty_{fk}")
+        inp_stat  = st.selectbox("สถานะ", ["พร้อมใช้","ชำรุด","สูญหาย"],
+                        index=["พร้อมใช้","ชำรุด","สูญหาย"].index(existing["status"])
+                                if existing is not None else 0,
+                        key=f"inp_stat_{fk}")
+        inp_desc  = st.text_area("รายละเอียด",
+                        value=existing["description"] if existing is not None else "",
+                        key=f"inp_desc_{fk}")
+        inp_img   = st.file_uploader("📷 รูปอุปกรณ์ (optional)",
+                        type=["jpg","jpeg","png"], key=f"inp_img_{fk}")
 
-            if st.form_submit_button("💾 บันทึก", type="primary", use_container_width=True):
-                if not code or not name:
-                    st.error("กรุณากรอกรหัสและชื่ออุปกรณ์")
+        if existing is not None and existing["image_path"] and os.path.exists(existing["image_path"]):
+            st.caption("รูปปัจจุบัน:")
+            show_image(existing["image_path"], width=80)
+
+        if st.button("💾 บันทึก", type="primary", use_container_width=True, key=f"btn_save_{fk}"):
+            if not inp_code or not inp_name:
+                st.error("กรุณากรอกรหัสและชื่ออุปกรณ์")
+            else:
+                dup = query("SELECT id FROM equipment WHERE code=?", (inp_code,))
+                cur_id = int(eq_id) if existing is not None else -1
+                if not dup.empty and (existing is None or int(dup.iloc[0]["id"]) != cur_id):
+                    st.error(f"❌ รหัส '{inp_code}' มีอยู่แล้ว กรุณาใช้รหัสอื่น")
                 else:
-                    dup = query("SELECT id FROM equipment WHERE code=?", (code,))
-                    cur_id = int(eq_id) if existing is not None else -1
-                    if not dup.empty and (existing is None or int(dup.iloc[0]["id"]) != cur_id):
-                        st.error(f"❌ รหัส '{code}' มีอยู่แล้ว กรุณาใช้รหัสอื่น")
-                    else:
-                        try:
-                            img_path = existing["image_path"] if existing is not None else None
-                            if uploaded:
-                                ext = uploaded.name.split(".")[-1]
-                                img_path = os.path.join(IMG_DIR, f"{code}.{ext}")
-                                with open(img_path, "wb") as fp:
-                                    fp.write(uploaded.getbuffer())
-                            if existing is None:
-                                # เพิ่มใหม่ available = total
-                                execute("""INSERT INTO equipment
-                                    (code,name,category,total_qty,available_qty,status,image_path,description)
-                                    VALUES (?,?,?,?,?,?,?,?)""",
-                                    (code, name, category, total_qty, total_qty, status_sel, img_path, description))
-                                st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
-                                st.rerun()
+                    try:
+                        img_path = existing["image_path"] if existing is not None else None
+                        if inp_img:
+                            ext = inp_img.name.split(".")[-1]
+                            img_path = os.path.join(IMG_DIR, f"{inp_code}.{ext}")
+                            with open(img_path, "wb") as fp:
+                                fp.write(inp_img.getbuffer())
+                        if existing is None:
+                            execute("""INSERT INTO equipment
+                                (code,name,category,total_qty,available_qty,status,image_path,description)
+                                VALUES (?,?,?,?,?,?,?,?)""",
+                                (inp_code, inp_name, inp_cat, inp_qty, inp_qty,
+                                 inp_stat, img_path, inp_desc))
+                            st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                            st.session_state["eq_edit_sel"] = "➕ เพิ่มใหม่"
+                            st.rerun()
+                        else:
+                            old_total     = int(existing["total_qty"])
+                            old_available = int(existing["available_qty"])
+                            borrowed      = old_total - old_available
+                            diff          = inp_qty - old_total
+                            new_available = old_available + diff
+                            if new_available < 0:
+                                st.error(
+                                    f"❌ ลดจำนวนไม่ได้! ยืมออกอยู่ {borrowed} ชิ้น "
+                                    f"ลดได้สูงสุดเหลือ {borrowed} ชิ้น"
+                                )
                             else:
-                                # คำนวณ available_qty ใหม่ตามส่วนต่าง
-                                old_total     = int(existing["total_qty"])
-                                old_available = int(existing["available_qty"])
-                                borrowed      = old_total - old_available  # จำนวนที่ยืมออกอยู่
-                                diff          = total_qty - old_total      # ส่วนต่างที่เปลี่ยน
-                                new_available = old_available + diff
-
-                                if new_available < 0:
-                                    st.error(
-                                        f"❌ ลดจำนวนไม่ได้! ขณะนี้ยืมออกอยู่ {borrowed} ชิ้น "
-                                        f"ลดได้สูงสุดเหลือ {borrowed} ชิ้น (จาก {old_total} → {borrowed})"
-                                    )
-                                else:
-                                    execute("""UPDATE equipment SET code=?,name=?,category=?,
-                                        total_qty=?,available_qty=?,status=?,image_path=?,description=?
-                                        WHERE id=?""",
-                                        (code, name, category, total_qty, new_available,
-                                         status_sel, img_path, description, eq_id))
-                                    if diff > 0:
-                                        st.success(f"✅ อัปเดตเรียบร้อย เพิ่มจำนวน +{diff} ชิ้น (พร้อมใช้: {new_available})")
-                                    elif diff < 0:
-                                        st.success(f"✅ อัปเดตเรียบร้อย ลดจำนวน {diff} ชิ้น (พร้อมใช้: {new_available})")
-                                    else:
-                                        st.success("✅ อัปเดตเรียบร้อย")
-                                    st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                                execute("""UPDATE equipment SET code=?,name=?,category=?,
+                                    total_qty=?,available_qty=?,status=?,image_path=?,description=?
+                                    WHERE id=?""",
+                                    (inp_code, inp_name, inp_cat, inp_qty, new_available,
+                                     inp_stat, img_path, inp_desc, eq_id))
+                                msg = "✅ อัปเดตเรียบร้อย"
+                                if diff > 0:   msg += f" (เพิ่ม +{diff} พร้อมใช้: {new_available})"
+                                elif diff < 0: msg += f" (ลด {diff} พร้อมใช้: {new_available})"
+                                st.success(msg)
+                                # refresh ฟอร์มด้วย code ใหม่
+                                st.session_state["eq_edit_sel"] = f"{inp_code} — {inp_name}"
+                                st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ เกิดข้อผิดพลาด: {e}")
     else:
         st.info("🔒 การเพิ่ม/แก้ไขอุปกรณ์ สำหรับ Admin เท่านั้น")
 
