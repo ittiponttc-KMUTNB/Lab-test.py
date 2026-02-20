@@ -361,7 +361,12 @@ def page_equipment():
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
                     if st.button("✏️ แก้ไข", key=f"edit_{r['id']}", use_container_width=True):
-                        st.session_state["edit_code"] = r["code"]
+                        # หา index ของ option ที่ตรงกับ code นี้
+                        eq_list_tmp = query("SELECT code, name FROM equipment ORDER BY code")
+                        opts_tmp = ["➕ เพิ่มใหม่"] + [f"{x['code']} — {x['name']}" for _, x in eq_list_tmp.iterrows()]
+                        matched_tmp = [i for i, o in enumerate(opts_tmp) if o.startswith(r["code"] + " —")]
+                        if matched_tmp:
+                            st.session_state["eq_edit_sel"] = matched_tmp[0]
                         st.rerun()
                 with btn_col2:
                     if st.button("🗑️ ลบ", key=f"del_{r['id']}", use_container_width=True):
@@ -379,15 +384,7 @@ def page_equipment():
         eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
         options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
 
-        # ถ้ากดปุ่ม ✏️ แก้ไข → ดึง edit_code จาก session แล้ว set eq_edit_sel
-        if "edit_code" in st.session_state:
-            edit_code = st.session_state["edit_code"]
-            matched = [i for i, o in enumerate(options) if o.startswith(edit_code + " —")]
-            if matched:
-                st.session_state["eq_edit_sel"] = matched[0]
-            del st.session_state["edit_code"]
-
-        # ถ้า eq_edit_sel ยังไม่มีใน session ให้เริ่มที่ 0
+        # eq_edit_sel ถูก set จากปุ่ม ✏️ แก้ไข ก่อน rerun แล้ว
         if "eq_edit_sel" not in st.session_state:
             st.session_state["eq_edit_sel"] = 0
 
