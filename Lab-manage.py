@@ -173,15 +173,17 @@ def img_b64(path):
         return None
 
 def show_image(image_path, width=100):
+    # width รับได้ทั้ง int (px) และ str เช่น "100%" 
+    w_style = f"{width}px" if isinstance(width, int) else width
     if image_path and os.path.exists(image_path):
         b64 = img_b64(image_path)
         st.markdown(
             f'<img src="data:image/png;base64,{b64}" '
-            f'style="width:{width}px;max-width:100%;border-radius:8px;border:1px solid #ddd;">',
+            f'style="width:{w_style};max-width:100%;border-radius:8px;border:1px solid #ddd;object-fit:contain;">',
             unsafe_allow_html=True)
     else:
         st.markdown(
-            f'<div style="width:{width}px;height:{width}px;background:#f0f2f6;'
+            f'<div style="width:{w_style};height:120px;background:#f0f2f6;'
             f'border-radius:8px;display:flex;align-items:center;justify-content:center;'
             f'font-size:2rem;border:1px solid #ddd;">📦</div>',
             unsafe_allow_html=True)
@@ -343,7 +345,7 @@ def page_equipment():
         with st.expander(f"{r['code']} — {r['name']}"):
             c1, c2 = st.columns([1, 2])
             with c1:
-                show_image(r["image_path"], width=90)
+                show_image(r["image_path"], width="100%")
             with c2:
                 st.markdown(
                     f"**หมวด:** {r['category'] or '-'}<br>"
@@ -434,7 +436,7 @@ def page_equipment():
 
             if existing is not None and existing["image_path"] and os.path.exists(str(existing["image_path"])):
                 st.caption("รูปปัจจุบัน:")
-                show_image(existing["image_path"], width=80)
+                show_image(existing["image_path"], width="100%")
 
             submitted = st.form_submit_button("💾 บันทึก", type="primary", use_container_width=True)
 
@@ -529,7 +531,7 @@ def page_borrow():
     # Preview อุปกรณ์ที่เลือก
     c_img, c_info = st.columns([1, 2])
     with c_img:
-        show_image(eq_row["image_path"], width=100)
+        show_image(eq_row["image_path"], width="100%")
     with c_info:
         st.markdown(f"**{eq_row['code']}** — {eq_row['name']}")
         st.markdown(f"หมวด: {eq_row['category'] or '-'}")
@@ -625,7 +627,7 @@ def page_return():
                 with st.expander(label):
                     c1, c2 = st.columns([1, 2])
                     with c1:
-                        show_image(r["image_path"], width=80)
+                        show_image(r["image_path"], width="100%")
                     with c2:
                         st.markdown(
                             f"📦 **{r['code']}** — {r['name']} ({r['qty']} ชิ้น)<br>"
@@ -673,7 +675,7 @@ def page_return():
                 with st.expander(label):
                     c1, c2 = st.columns([1, 2])
                     with c1:
-                        show_image(r["image_path"], width=80)
+                        show_image(r["image_path"], width="100%")
                     with c2:
                         st.markdown(
                             f"📦 **{r['code']}** — {r['name']} ({r['qty']} ชิ้น)<br>"
