@@ -358,21 +358,40 @@ def page_equipment():
             if not lt.empty:
                 st.caption(f"👤 ผู้ยืมล่าสุด: **{lt.iloc[0]['name']}** ({lt.iloc[0]['borrow_date']})")
             if is_admin():
-                if st.button("🗑️ ลบ", key=f"del_{r['id']}"):
-                    active = query("SELECT COUNT(*) as n FROM transactions WHERE equipment_id=? AND status='ยืมอยู่'",
-                                   (r["id"],)).iloc[0]["n"]
-                    if active > 0:
-                        st.error("ไม่สามารถลบได้ มีการยืมอยู่")
-                    else:
-                        execute("DELETE FROM equipment WHERE id=?", (r["id"],))
-                        st.success("ลบแล้ว")
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    if st.button("✏️ แก้ไข", key=f"edit_{r['id']}", use_container_width=True):
+                        st.session_state["edit_code"] = r["code"]
                         st.rerun()
+                with btn_col2:
+                    if st.button("🗑️ ลบ", key=f"del_{r['id']}", use_container_width=True):
+                        active = query("SELECT COUNT(*) as n FROM transactions WHERE equipment_id=? AND status='ยืมอยู่'",
+                                       (r["id"],)).iloc[0]["n"]
+                        if active > 0:
+                            st.error("ไม่สามารถลบได้ มีการยืมอยู่")
+                        else:
+                            execute("DELETE FROM equipment WHERE id=?", (r["id"],))
+                            st.success("ลบแล้ว")
+                            st.rerun()
 
     if is_admin():
         st.markdown('<div class="section-header">➕ เพิ่ม / แก้ไขอุปกรณ์</div>', unsafe_allow_html=True)
         eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
         options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
-        choice  = st.selectbox("เลือกรายการ", options, key="eq_edit_sel")
+
+        # ถ้ากดปุ่ม ✏️ แก้ไข จาก item → กระโดดไปที่รายการนั้นอัตโนมัติ
+        edit_code = st.session_state.get("edit_code", None)
+        default_idx = 0
+        if edit_code:
+            matched = [i for i, o in enumerate(options) if o.startswith(edit_code + " —")]
+            if matched:
+                default_idx = matched[0]
+
+        choice = st.selectbox("เลือกรายการ", options, index=default_idx, key="eq_edit_sel")
+
+        # ล้าง session หลังจาก Dropdown โหลดค่าแล้ว
+        if edit_code:
+            del st.session_state["edit_code"]
 
         existing, eq_id = None, None
         if choice != "➕ เพิ่มใหม่":
