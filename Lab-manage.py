@@ -19,7 +19,35 @@ st.set_page_config(
 
 DB_PATH = "lab_equipment.db"
 IMG_DIR = "equipment_images"
+ADMIN_PASSWORD = "admin1234"   # ← เปลี่ยน password ได้ที่นี่
 os.makedirs(IMG_DIR, exist_ok=True)
+
+# ─── ADMIN AUTH ───────────────────────────────────────────────────────────────
+def is_admin():
+    return st.session_state.get("is_admin", False)
+
+def admin_login_widget():
+    """Show lock icon + login form in sidebar"""
+    if is_admin():
+        st.sidebar.success("🔓 Admin Mode")
+        if st.sidebar.button("🔒 ออกจาก Admin", use_container_width=True):
+            st.session_state.is_admin = False
+            st.rerun()
+    else:
+        with st.sidebar.expander("🔒 Admin Login"):
+            pwd = st.text_input("รหัสผ่าน Admin", type="password", key="admin_pwd_input")
+            if st.button("เข้าสู่ระบบ", use_container_width=True):
+                if pwd == ADMIN_PASSWORD:
+                    st.session_state.is_admin = True
+                    st.rerun()
+                else:
+                    st.error("รหัสผ่านไม่ถูกต้อง")
+
+def require_admin():
+    """Block page and show warning if not admin"""
+    if not is_admin():
+        st.warning("🔒 ฟังก์ชันนี้สำหรับ Admin เท่านั้น กรุณา Login ที่ Sidebar")
+        st.stop()
 
 # ─── DATABASE ─────────────────────────────────────────────────────────────────
 def get_conn():
@@ -149,6 +177,8 @@ def sidebar():
                 st.rerun()
 
         st.markdown("---")
+        admin_login_widget()
+        st.markdown("---")
         # Quick stats
         eq = query("SELECT COUNT(*) as n FROM equipment").iloc[0]["n"]
         active = query("SELECT COUNT(*) as n FROM transactions WHERE status='ยืมอยู่'").iloc[0]["n"]
@@ -224,9 +254,14 @@ def page_dashboard():
 # ─── PAGE: EQUIPMENT ──────────────────────────────────────────────────────────
 def page_equipment():
     st.title("📦 จัดการอุปกรณ์")
-    tab1, tab2 = st.tabs(["รายการอุปกรณ์", "เพิ่ม/แก้ไขอุปกรณ์"])
 
-    with tab1:
+    tab_labels = ["รายการอุปกรณ์"]
+    if is_admin():
+        tab_labels.append("➕ เพิ่ม/แก้ไขอุปกรณ์")
+    tabs = st.tabs(tab_labels)
+
+    # ── TAB 1: รายการอุปกรณ์ (ทุกคนดูได้) ────────────────────────────────────
+    with tabs[0]:
         search = st.text_input("🔍 ค้นหา (ชื่อ/รหัส/หมวดหมู่)", "")
         cats = query("SELECT DISTINCT category FROM equipment WHERE category IS NOT NULL")
         cat_filter = st.selectbox("หมวดหมู่", ["ทั้งหมด"] + cats["category"].tolist())
@@ -256,74 +291,76 @@ def page_equipment():
                         st.markdown(f"**ชื่อ:** {row['name']}")
                         st.markdown(f"**หมวด:** {row['category'] or '-'}")
                         st.markdown(f"**จำนวนทั้งหมด:** {row['total_qty']} | **พร้อมใช้:** {row['available_qty']}")
-                        st.markdown(f"**สถานะ:** ", unsafe_allow_html=False)
                         st.markdown(status_badge(row["status"]), unsafe_allow_html=True)
                         if row["description"]:
                             st.caption(row["description"])
                     with c3:
-                        # Latest borrower
                         lt = query("""SELECT b.name, t.borrow_date FROM transactions t
                                       JOIN borrowers b ON t.borrower_id=b.id
                                       WHERE t.equipment_id=? ORDER BY t.created_at DESC LIMIT 1""",
                                    (row["id"],))
                         if not lt.empty:
                             st.caption(f"ผู้ยืมล่าสุด:\n**{lt.iloc[0]['name']}**\n{lt.iloc[0]['borrow_date']}")
-                        if st.button("🗑️ ลบ", key=f"del_{row['id']}"):
-                            active = query("SELECT COUNT(*) as n FROM transactions WHERE equipment_id=? AND status='ยืมอยู่'",
-                                           (row["id"],)).iloc[0]["n"]
-                            if active > 0:
-                                st.error("ไม่สามารถลบได้ มีการยืมอยู่")
-                            else:
-                                execute("DELETE FROM equipment WHERE id=?", (row["id"],))
-                                st.success("ลบแล้ว")
-                                st.rerun()
+                        # ปุ่มลบ: เฉพาะ Admin
+                        if is_admin():
+                            if st.button("🗑️ ลบ", key=f"del_{row['id']}"):
+                                active = query("SELECT COUNT(*) as n FROM transactions WHERE equipment_id=? AND status='ยืมอยู่'",
+                                               (row["id"],)).iloc[0]["n"]
+                                if active > 0:
+                                    st.error("ไม่สามารถลบได้ มีการยืมอยู่")
+                                else:
+                                    execute("DELETE FROM equipment WHERE id=?", (row["id"],))
+                                    st.success("ลบแล้ว")
+                                    st.rerun()
+                        else:
+                            st.caption("🔒 Admin เท่านั้น")
 
-    with tab2:
-        # Edit or Add
-        eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
-        options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
-        choice = st.selectbox("เลือกอุปกรณ์ที่ต้องการแก้ไข หรือเพิ่มใหม่", options)
+    # ── TAB 2: เพิ่ม/แก้ไข (Admin เท่านั้น) ──────────────────────────────────
+    if is_admin():
+        with tabs[1]:
+            eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
+            options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
+            choice = st.selectbox("เลือกอุปกรณ์ที่ต้องการแก้ไข หรือเพิ่มใหม่", options)
 
-        if choice == "➕ เพิ่มใหม่":
-            existing = None
-        else:
-            eq_id = eq_list.iloc[options.index(choice) - 1]["id"]
-            existing = query("SELECT * FROM equipment WHERE id=?", (eq_id,)).iloc[0]
+            if choice == "➕ เพิ่มใหม่":
+                existing = None
+            else:
+                eq_id = eq_list.iloc[options.index(choice) - 1]["id"]
+                existing = query("SELECT * FROM equipment WHERE id=?", (eq_id,)).iloc[0]
 
-        with st.form("eq_form"):
-            col1, col2 = st.columns(2)
-            code = col1.text_input("รหัสอุปกรณ์*", value=existing["code"] if existing is not None else "")
-            name = col2.text_input("ชื่ออุปกรณ์*", value=existing["name"] if existing is not None else "")
-            category = col1.text_input("หมวดหมู่", value=existing["category"] if existing is not None else "")
-            total_qty = col2.number_input("จำนวนทั้งหมด", min_value=1, value=int(existing["total_qty"]) if existing is not None else 1)
-            status = col1.selectbox("สถานะ", ["พร้อมใช้", "ชำรุด", "สูญหาย"],
-                                    index=["พร้อมใช้", "ชำรุด", "สูญหาย"].index(existing["status"]) if existing is not None else 0)
-            description = st.text_area("รายละเอียดเพิ่มเติม", value=existing["description"] if existing is not None else "")
-            uploaded = st.file_uploader("📷 อัปโหลดรูปอุปกรณ์ (optional)", type=["jpg", "jpeg", "png"])
+            with st.form("eq_form"):
+                col1, col2 = st.columns(2)
+                code = col1.text_input("รหัสอุปกรณ์*", value=existing["code"] if existing is not None else "")
+                name = col2.text_input("ชื่ออุปกรณ์*", value=existing["name"] if existing is not None else "")
+                category = col1.text_input("หมวดหมู่", value=existing["category"] if existing is not None else "")
+                total_qty = col2.number_input("จำนวนทั้งหมด", min_value=1, value=int(existing["total_qty"]) if existing is not None else 1)
+                status = col1.selectbox("สถานะ", ["พร้อมใช้", "ชำรุด", "สูญหาย"],
+                                        index=["พร้อมใช้", "ชำรุด", "สูญหาย"].index(existing["status"]) if existing is not None else 0)
+                description = st.text_area("รายละเอียดเพิ่มเติม", value=existing["description"] if existing is not None else "")
+                uploaded = st.file_uploader("📷 อัปโหลดรูปอุปกรณ์ (optional)", type=["jpg", "jpeg", "png"])
 
-            submitted = st.form_submit_button("💾 บันทึก", type="primary")
-            if submitted:
-                if not code or not name:
-                    st.error("กรุณากรอกรหัสและชื่ออุปกรณ์")
-                else:
-                    img_path = existing["image_path"] if existing is not None else None
-                    if uploaded:
-                        ext = uploaded.name.split(".")[-1]
-                        img_path = os.path.join(IMG_DIR, f"{code}.{ext}")
-                        with open(img_path, "wb") as f:
-                            f.write(uploaded.getbuffer())
-
-                    if existing is None:
-                        execute("""INSERT INTO equipment (code, name, category, total_qty, available_qty, status, image_path, description)
-                                   VALUES (?,?,?,?,?,?,?,?)""",
-                                (code, name, category, total_qty, total_qty, status, img_path, description))
-                        st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                submitted = st.form_submit_button("💾 บันทึก", type="primary")
+                if submitted:
+                    if not code or not name:
+                        st.error("กรุณากรอกรหัสและชื่ออุปกรณ์")
                     else:
-                        execute("""UPDATE equipment SET code=?, name=?, category=?, total_qty=?,
-                                   status=?, image_path=?, description=? WHERE id=?""",
-                                (code, name, category, total_qty, status, img_path, description, eq_id))
-                        st.success("✅ อัปเดตอุปกรณ์เรียบร้อย")
-                    st.rerun()
+                        img_path = existing["image_path"] if existing is not None else None
+                        if uploaded:
+                            ext = uploaded.name.split(".")[-1]
+                            img_path = os.path.join(IMG_DIR, f"{code}.{ext}")
+                            with open(img_path, "wb") as f:
+                                f.write(uploaded.getbuffer())
+                        if existing is None:
+                            execute("""INSERT INTO equipment (code, name, category, total_qty, available_qty, status, image_path, description)
+                                       VALUES (?,?,?,?,?,?,?,?)""",
+                                    (code, name, category, total_qty, total_qty, status, img_path, description))
+                            st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                        else:
+                            execute("""UPDATE equipment SET code=?, name=?, category=?, total_qty=?,
+                                       status=?, image_path=?, description=? WHERE id=?""",
+                                    (code, name, category, total_qty, status, img_path, description, eq_id))
+                            st.success("✅ อัปเดตอุปกรณ์เรียบร้อย")
+                        st.rerun()
 
 # ─── PAGE: BORROW ─────────────────────────────────────────────────────────────
 def page_borrow():
@@ -485,14 +522,17 @@ def page_report():
         st.dataframe(df, use_container_width=True, hide_index=True)
 
         if not df.empty:
-            if st.button("📥 Export Excel", type="primary"):
-                excel_data = export_excel(df, "ประวัติการเบิก-คืนอุปกรณ์")
-                st.download_button(
-                    "⬇️ ดาวน์โหลด Excel",
-                    data=excel_data,
-                    file_name=f"borrow_history_{date.today()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            if is_admin():
+                if st.button("📥 Export Excel", type="primary"):
+                    excel_data = export_excel(df, "ประวัติการเบิก-คืนอุปกรณ์")
+                    st.download_button(
+                        "⬇️ ดาวน์โหลด Excel",
+                        data=excel_data,
+                        file_name=f"borrow_history_{date.today()}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            else:
+                st.info("🔒 Export Excel สำหรับ Admin เท่านั้น")
 
     with tab2:
         df2 = query("""
@@ -506,14 +546,17 @@ def page_report():
         st.dataframe(df2, use_container_width=True, hide_index=True)
 
         if not df2.empty:
-            if st.button("📥 Export Excel สรุปอุปกรณ์", type="primary"):
-                excel_data = export_excel(df2, "สรุปรายการอุปกรณ์")
-                st.download_button(
-                    "⬇️ ดาวน์โหลด Excel",
-                    data=excel_data,
-                    file_name=f"equipment_summary_{date.today()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            if is_admin():
+                if st.button("📥 Export Excel สรุปอุปกรณ์", type="primary"):
+                    excel_data = export_excel(df2, "สรุปรายการอุปกรณ์")
+                    st.download_button(
+                        "⬇️ ดาวน์โหลด Excel",
+                        data=excel_data,
+                        file_name=f"equipment_summary_{date.today()}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            else:
+                st.info("🔒 Export Excel สำหรับ Admin เท่านั้น")
 
 def export_excel(df: pd.DataFrame, sheet_name: str) -> bytes:
     output = BytesIO()
