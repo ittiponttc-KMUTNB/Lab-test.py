@@ -203,7 +203,7 @@ def overdue_days(due_str):
         return 0
 
 # ─── NAVIGATION ───────────────────────────────────────────────────────────────
-PAGES = [("🏠","Dashboard"), ("📦","อุปกรณ์"), ("➕","เบิก"), ("✅","คืน"), ("📋","รายงาน")]
+PAGES = [("🏠","Dashboard"), ("📦","อุปกรณ์"), ("➕","เบิก"), ("✅","คืน"), ("📋","รายงาน"), ("⚙️","ตั้งค่า")]
 
 def nav():
     if "page" not in st.session_state:
@@ -245,6 +245,7 @@ def nav():
         ("เบิก",      "➕", "เบิก"),
         ("คืน",       "✅", "คืน"),
         ("รายงาน",    "📋", "รายงาน"),
+        ("ตั้งค่า",   "⚙️", "ตั้งค่า"),
     ]
     cols = st.columns(len(NAV_ITEMS))
     for i, (name, icon, label) in enumerate(NAV_ITEMS):
@@ -678,6 +679,169 @@ def export_excel(df, sheet_name):
     wb.save(output)
     return output.getvalue()
 
+
+# ─── PAGE: SETTINGS ───────────────────────────────────────────────────────────
+def page_settings():
+    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">⚙️ ตั้งค่าระบบ</p>', unsafe_allow_html=True)
+
+    if not is_admin():
+        st.warning("🔒 หน้านี้สำหรับ Admin เท่านั้น กรุณา Login ที่ Sidebar")
+        return
+
+    tab1, tab2, tab3 = st.tabs(["💾 สำรองข้อมูล", "📂 นำเข้าข้อมูล", "🗑️ ล้างข้อมูล"])
+
+    # ── TAB 1: Export JSON ────────────────────────────────────────────────────
+    with tab1:
+        st.markdown('<div class="section-header">💾 Export — สำรองข้อมูลเป็น JSON</div>', unsafe_allow_html=True)
+        st.info("Export ข้อมูลทั้งหมด (อุปกรณ์, ประวัติการเบิก-คืน, รายชื่อผู้เบิก) เป็นไฟล์ JSON สำหรับสำรองหรือย้ายระบบ")
+
+        if st.button("📦 สร้างไฟล์ Backup JSON", type="primary", use_container_width=True):
+            import json
+            eq   = query("SELECT * FROM equipment").to_dict(orient="records")
+            tx   = query("SELECT * FROM transactions").to_dict(orient="records")
+            borr = query("SELECT * FROM borrowers").to_dict(orient="records")
+            backup = {
+                "backup_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "version": "1.0",
+                "equipment":    eq,
+                "transactions": tx,
+                "borrowers":    borr
+            }
+            json_str = json.dumps(backup, ensure_ascii=False, indent=2)
+            fname = f"lab_backup_{date.today()}.json"
+            st.download_button(
+                label=f"⬇️ ดาวน์โหลด {fname}",
+                data=json_str.encode("utf-8"),
+                file_name=fname,
+                mime="application/json",
+                use_container_width=True
+            )
+            st.success(f"✅ สร้าง Backup สำเร็จ — อุปกรณ์ {len(eq)} รายการ, ประวัติ {len(tx)} รายการ")
+
+    # ── TAB 2: Import JSON ────────────────────────────────────────────────────
+    with tab2:
+        st.markdown('<div class="section-header">📂 Import — นำเข้าข้อมูลจาก JSON</div>', unsafe_allow_html=True)
+        st.warning("⚠️ การนำเข้าจะ **เพิ่ม** ข้อมูลเข้าระบบ ไม่ได้ลบข้อมูลเดิม")
+
+        uploaded_json = st.file_uploader("เลือกไฟล์ JSON", type=["json"], key="import_json")
+
+        if uploaded_json:
+            import json
+            try:
+                data = json.loads(uploaded_json.read().decode("utf-8"))
+                eq_count   = len(data.get("equipment", []))
+                tx_count   = len(data.get("transactions", []))
+                borr_count = len(data.get("borrowers", []))
+                backup_date = data.get("backup_date", "ไม่ทราบ")
+
+                st.info(f"📋 ข้อมูลใน Backup | วันที่: {backup_date} | อุปกรณ์: {eq_count} รายการ | ประวัติ: {tx_count} รายการ | ผู้เบิก: {borr_count} คน")
+
+                import_mode = st.radio("โหมดนำเข้า", 
+                    ["เฉพาะอุปกรณ์ (equipment)", "ทั้งหมด (equipment + transactions + borrowers)"])
+
+                if st.button("📂 ยืนยันนำเข้าข้อมูล", type="primary", use_container_width=True):
+                    conn = get_conn()
+                    c = conn.cursor()
+                    imported = 0
+
+                    # Import equipment
+                    for eq in data.get("equipment", []):
+                        try:
+                            c.execute("""INSERT OR IGNORE INTO equipment
+                                (code,name,category,total_qty,available_qty,status,image_path,description)
+                                VALUES (?,?,?,?,?,?,?,?)""",
+                                (eq["code"], eq["name"], eq.get("category"), eq.get("total_qty",1),
+                                 eq.get("available_qty",1), eq.get("status","พร้อมใช้"),
+                                 eq.get("image_path"), eq.get("description")))
+                            imported += 1
+                        except:
+                            pass
+
+                    if "ทั้งหมด" in import_mode:
+                        # Import borrowers
+                        id_map = {}
+                        for b in data.get("borrowers", []):
+                            old_id = b["id"]
+                            c.execute("""INSERT INTO borrowers (name,type,student_id,department,phone)
+                                VALUES (?,?,?,?,?)""",
+                                (b["name"], b["type"], b.get("student_id"), b.get("department"), b.get("phone")))
+                            id_map[old_id] = c.lastrowid
+
+                        # Import transactions
+                        eq_code_map = {r["code"]: r["id"] for r in query("SELECT id,code FROM equipment").to_dict("records")}
+                        for tx in data.get("transactions", []):
+                            try:
+                                new_borr_id = id_map.get(tx["borrower_id"])
+                                eq_id = tx.get("equipment_id")
+                                if new_borr_id and eq_id:
+                                    c.execute("""INSERT INTO transactions
+                                        (equipment_id,borrower_id,qty,borrow_date,due_date,return_date,
+                                         condition_out,condition_in,note,status)
+                                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                                        (eq_id, new_borr_id, tx.get("qty",1),
+                                         tx.get("borrow_date"), tx.get("due_date"), tx.get("return_date"),
+                                         tx.get("condition_out","ปกติ"), tx.get("condition_in"),
+                                         tx.get("note"), tx.get("status","คืนแล้ว")))
+                            except:
+                                pass
+
+                    conn.commit()
+                    conn.close()
+                    st.success(f"✅ นำเข้าข้อมูลสำเร็จ!")
+                    st.rerun()
+
+            except Exception as e:
+                st.error(f"❌ ไฟล์ไม่ถูกต้อง: {e}")
+
+    # ── TAB 3: ล้างข้อมูล ─────────────────────────────────────────────────────
+    with tab3:
+        st.markdown('<div class="section-header">🗑️ ล้างข้อมูล</div>', unsafe_allow_html=True)
+        st.error("⚠️ การล้างข้อมูลไม่สามารถกู้คืนได้ แนะนำให้ **Export JSON ก่อน** ทุกครั้ง!")
+
+        clear_mode = st.selectbox("เลือกประเภทการล้าง", [
+            "เลือก...",
+            "🔄 รีเซ็ตจำนวนอุปกรณ์ (available = total)",
+            "📋 ล้างประวัติการเบิก-คืนทั้งหมด",
+            "💥 ล้างทุกอย่าง (เริ่มระบบใหม่)",
+        ])
+
+        if clear_mode != "เลือก...":
+            # คำอธิบายแต่ละโหมด
+            desc = {
+                "🔄 รีเซ็ตจำนวนอุปกรณ์ (available = total)": "รีเซ็ต available_qty ของทุกอุปกรณ์ให้เท่ากับ total_qty และเปลี่ยนสถานะเป็น พร้อมใช้ ใช้หลังตรวจนับอุปกรณ์",
+                "📋 ล้างประวัติการเบิก-คืนทั้งหมด":          "ลบ transactions และ borrowers ทั้งหมด ข้อมูลอุปกรณ์ยังอยู่ ใช้เปิดเทอมใหม่",
+                "💥 ล้างทุกอย่าง (เริ่มระบบใหม่)":           "ลบข้อมูลทุกตาราง เริ่มระบบใหม่ทั้งหมด",
+            }
+            st.info(f"ℹ️ {desc.get(clear_mode,'')}")
+
+            st.markdown("**พิมพ์ CONFIRM เพื่อยืนยัน:**")
+            confirm_text = st.text_input("", placeholder="พิมพ์ CONFIRM", key="confirm_clear")
+
+            if st.button("🗑️ ดำเนินการล้างข้อมูล", type="primary", use_container_width=True):
+                if confirm_text != "CONFIRM":
+                    st.error("❌ กรุณาพิมพ์ CONFIRM ให้ถูกต้อง (ตัวพิมพ์ใหญ่)")
+                else:
+                    try:
+                        if "รีเซ็ตจำนวน" in clear_mode:
+                            execute("UPDATE equipment SET available_qty=total_qty, status='พร้อมใช้'")
+                            st.success("✅ รีเซ็ตจำนวนอุปกรณ์เรียบร้อย")
+
+                        elif "ล้างประวัติ" in clear_mode:
+                            execute("DELETE FROM transactions")
+                            execute("DELETE FROM borrowers")
+                            execute("UPDATE equipment SET available_qty=total_qty, status='พร้อมใช้'")
+                            st.success("✅ ล้างประวัติการเบิก-คืนเรียบร้อย")
+
+                        elif "ล้างทุกอย่าง" in clear_mode:
+                            execute("DELETE FROM transactions")
+                            execute("DELETE FROM borrowers")
+                            execute("DELETE FROM equipment")
+                            st.success("✅ ล้างข้อมูลทั้งหมดเรียบร้อย เริ่มระบบใหม่ได้เลย")
+
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
 # ─── FOOTER ───────────────────────────────────────────────────────────────────
 def footer():
     st.markdown("---")
@@ -701,6 +865,7 @@ def main():
     elif page == "เบิก":      page_borrow()
     elif page == "คืน":       page_return()
     elif page == "รายงาน":    page_report()
+    elif page == "ตั้งค่า":   page_settings()
     footer()
 
 if __name__ == "__main__":
