@@ -461,7 +461,7 @@ def page_equipment():
                                 (code,name,category,total_qty,available_qty,status,image_path,description)
                                 VALUES (?,?,?,?,?,?,?,?)""",
                                 (sv_code,sv_name,sv_cat,sv_qty,sv_qty,sv_stat,img_path,sv_desc))
-                            st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                            st.success(f"✅ บันทึกการเพิ่มอุปกรณ์ '{sv_code} — {sv_name}' เรียบร้อยแล้ว")
                             st.session_state["_next_sel"] = "➕ เพิ่มใหม่"
                         else:
                             old_total     = int(existing["total_qty"])
@@ -476,9 +476,9 @@ def page_equipment():
                                 total_qty=?,available_qty=?,status=?,image_path=?,description=?
                                 WHERE id=?""",
                                 (sv_code,sv_name,sv_cat,sv_qty,new_available,sv_stat,img_path,sv_desc,eq_id))
-                            msg = "✅ อัปเดตเรียบร้อย"
-                            if diff > 0:   msg += f" เพิ่ม +{diff} (พร้อมใช้: {new_available})"
-                            elif diff < 0: msg += f" ลด {diff} (พร้อมใช้: {new_available})"
+                            msg = f"✅ บันทึกการแก้ไข '{sv_code} — {sv_name}' เรียบร้อยแล้ว"
+                            if diff > 0:   msg += f" (เพิ่มจำนวน +{diff} พร้อมใช้: {new_available})"
+                            elif diff < 0: msg += f" (ลดจำนวน {diff} พร้อมใช้: {new_available})"
                             st.success(msg)
                             st.session_state["_next_sel"] = f"{sv_code} — {sv_name}"
                         st.rerun()
