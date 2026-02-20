@@ -390,12 +390,24 @@ def page_equipment():
                 st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกรายการใหม่อีกครั้ง")
                 existing = None
 
-        with st.form("eq_form", clear_on_submit=True):
+        # แสดงข้อมูลปัจจุบันก่อนฟอร์ม (ไม่ขึ้นกับ form state)
+        if existing is not None:
+            borrowed_now = int(existing["total_qty"]) - int(existing["available_qty"])
+            st.markdown(
+                f'<div class="eq-card" style="border-left:4px solid #1F4E79;">'
+                f'📊 <b>ข้อมูลปัจจุบัน:</b> &nbsp;'
+                f'ทั้งหมด <b>{existing["total_qty"]}</b> | '
+                f'พร้อมใช้ <b>{existing["available_qty"]}</b> | '
+                f'ยืมออก <b>{borrowed_now}</b>'
+                f'</div>', unsafe_allow_html=True)
+
+        with st.form("eq_form", clear_on_submit=False):
             code        = st.text_input("รหัสอุปกรณ์ *", value=existing["code"]        if existing is not None else "")
             name        = st.text_input("ชื่ออุปกรณ์ *",  value=existing["name"]        if existing is not None else "")
             category    = st.text_input("หมวดหมู่",        value=existing["category"]    if existing is not None else "")
             total_qty   = st.number_input("จำนวนทั้งหมด", min_value=1,
-                                          value=int(existing["total_qty"]) if existing is not None else 1)
+                                          value=int(existing["total_qty"]) if existing is not None else 1,
+                                          key=f"total_qty_{eq_id if eq_id else 'new'}")
             status_sel  = st.selectbox("สถานะ", ["พร้อมใช้","ชำรุด","สูญหาย"],
                                        index=["พร้อมใช้","ชำรุด","สูญหาย"].index(existing["status"])
                                        if existing is not None else 0)
