@@ -527,71 +527,141 @@ def page_borrow():
 def page_return():
     st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">✅ คืนอุปกรณ์</p>', unsafe_allow_html=True)
 
-    search = st.text_input("🔍 ค้นหาชื่อผู้ยืม / รหัส / ชื่ออุปกรณ์",
-                            placeholder="พิมพ์เพื่อค้นหา...")
+    # ── Tab: แจ้งคืน (ทุกคน) vs รอตรวจสอบ (Admin ยืนยัน) ──────────────────
+    tab1, tab2 = st.tabs(["📬 แจ้งคืนอุปกรณ์", f"🔍 รอตรวจสอบ {'(Admin)' if is_admin() else ''}"])
 
-    df = query("""
-        SELECT t.id, e.code, e.name, e.image_path, b.name as borrower,
-               b.type, t.qty, t.borrow_date, t.due_date, t.condition_out,
-               t.note as borrow_note, t.equipment_id
-        FROM transactions t
-        JOIN equipment e ON t.equipment_id=e.id
-        JOIN borrowers b ON t.borrower_id=b.id
-        WHERE t.status='ยืมอยู่'
-        ORDER BY t.due_date ASC
-    """)
-    if search:
-        mask = (df["borrower"].str.contains(search, case=False, na=False) |
-                df["code"].str.contains(search, case=False, na=False) |
-                df["name"].str.contains(search, case=False, na=False))
-        df = df[mask]
+    # ── TAB 1: ผู้เบิกแจ้งคืน ────────────────────────────────────────────────
+    with tab1:
+        st.info("👤 ผู้ยืมกรอกข้อมูลและแจ้งคืน จากนั้น Admin จะตรวจสอบและยืนยัน")
+        search = st.text_input("🔍 ค้นหาชื่อผู้ยืม / รหัส / ชื่ออุปกรณ์",
+                                placeholder="พิมพ์เพื่อค้นหา...", key="ret_search")
 
-    if df.empty:
-        st.info("✅ ไม่มีรายการยืม" if not search else "ไม่พบรายการที่ค้นหา")
-        return
+        df = query("""
+            SELECT t.id, e.code, e.name, e.image_path, b.name as borrower,
+                   b.type, t.qty, t.borrow_date, t.due_date, t.condition_out,
+                   t.note as borrow_note, t.equipment_id
+            FROM transactions t
+            JOIN equipment e ON t.equipment_id=e.id
+            JOIN borrowers b ON t.borrower_id=b.id
+            WHERE t.status='ยืมอยู่'
+            ORDER BY t.due_date ASC
+        """)
+        if search:
+            mask = (df["borrower"].str.contains(search, case=False, na=False) |
+                    df["code"].str.contains(search, case=False, na=False) |
+                    df["name"].str.contains(search, case=False, na=False))
+            df = df[mask]
 
-    st.caption(f"พบ {len(df)} รายการ")
+        if df.empty:
+            st.info("✅ ไม่มีรายการยืม" if not search else "ไม่พบรายการที่ค้นหา")
+        else:
+            st.caption(f"พบ {len(df)} รายการ")
+            for _, r in df.iterrows():
+                od    = overdue_days(r["due_date"])
+                bc    = "#ff6b6b" if od > 0 else "#1F4E79"
+                label = f"TX#{r['id']} | {r['code']} {r['name']} | {r['borrower']}"
+                if od > 0:
+                    label += f" ⚠️ เกิน {od} วัน"
 
-    for _, r in df.iterrows():
-        od     = overdue_days(r["due_date"])
-        border = "#ff6b6b" if od > 0 else "#1F4E79"
-        label  = f"TX#{r['id']} | {r['code']} {r['name']} | {r['borrower']}"
-        if od > 0:
-            label += f" ⚠️ เกิน {od} วัน"
+                with st.expander(label):
+                    c1, c2 = st.columns([1, 2])
+                    with c1:
+                        show_image(r["image_path"], width=80)
+                    with c2:
+                        st.markdown(
+                            f"📦 **{r['code']}** — {r['name']} ({r['qty']} ชิ้น)<br>"
+                            f"👤 {r['borrower']} ({r['type']})<br>"
+                            f"📅 เบิก {r['borrow_date']} | คืน <b>{r['due_date']}</b>"
+                            + (f"<br><b style='color:red;'>⚠️ เกิน {od} วัน</b>" if od > 0 else ""),
+                            unsafe_allow_html=True)
+                        st.caption(f"สภาพตอนเบิก: {r['condition_out']}")
 
-        with st.expander(label):
-            c1, c2 = st.columns([1, 2])
-            with c1:
-                show_image(r["image_path"], width=80)
-            with c2:
-                st.markdown(
-                    f"📦 **{r['code']}** — {r['name']} ({r['qty']} ชิ้น)<br>"
-                    f"👤 {r['borrower']} ({r['type']})<br>"
-                    f"📅 เบิก {r['borrow_date']}<br>"
-                    f"📅 คืน <b>{r['due_date']}</b>"
-                    + (f"<br><b style='color:red;'>⚠️ เกิน {od} วัน</b>" if od > 0 else ""),
-                    unsafe_allow_html=True)
-                st.caption(f"สภาพตอนเบิก: {r['condition_out']}")
+                    return_date  = st.date_input("วันที่นำมาคืน", value=date.today(), key=f"rd_{r['id']}")
+                    condition_in = st.selectbox("สภาพอุปกรณ์ที่นำมาคืน",
+                                                ["ปกติ", "มีรอยขีดข่วน", "ชำรุด", "สูญหาย"],
+                                                key=f"ci_{r['id']}")
+                    return_note  = st.text_input("หมายเหตุ", key=f"rn_{r['id']}")
 
-            return_date  = st.date_input("วันที่คืน", value=date.today(), key=f"rd_{r['id']}")
-            condition_in = st.selectbox("สภาพอุปกรณ์เมื่อคืน",
-                                        ["ปกติ", "มีรอยขีดข่วน", "ชำรุด", "สูญหาย"],
-                                        key=f"ci_{r['id']}")
-            return_note  = st.text_input("หมายเหตุ", key=f"rn_{r['id']}")
+                    if st.button("📬 แจ้งคืนอุปกรณ์", key=f"notify_{r['id']}",
+                                 type="primary", use_container_width=True):
+                        execute("""UPDATE transactions SET return_date=?,condition_in=?,note=?,status='รอตรวจสอบ'
+                                   WHERE id=?""", (str(return_date), condition_in, return_note, r["id"]))
+                        st.success("📬 แจ้งคืนเรียบร้อยแล้ว! กรุณารอ Admin ตรวจสอบและยืนยัน")
+                        st.rerun()
 
-            if st.button("✅ บันทึกการคืน", key=f"ret_{r['id']}", type="primary",
-                         use_container_width=True):
-                execute("""UPDATE transactions SET return_date=?,condition_in=?,note=?,status='คืนแล้ว'
-                           WHERE id=?""", (str(return_date), condition_in, return_note, r["id"]))
-                execute("UPDATE equipment SET available_qty=available_qty+? WHERE id=?",
-                        (r["qty"], r["equipment_id"]))
-                if condition_in == "ชำรุด":
-                    execute("UPDATE equipment SET status='ชำรุด' WHERE id=?", (r["equipment_id"],))
-                elif condition_in == "สูญหาย":
-                    execute("UPDATE equipment SET status='สูญหาย',available_qty=available_qty-? WHERE id=?",
-                            (r["qty"], r["equipment_id"]))
-                st.success(f"✅ บันทึกคืนเรียบร้อย สภาพ: {condition_in}")
-                st.rerun()
+    # ── TAB 2: Admin ตรวจสอบและยืนยัน ───────────────────────────────────────
+    with tab2:
+        df_wait = query("""
+            SELECT t.id, e.code, e.name, e.image_path, b.name as borrower,
+                   b.type, b.phone, t.qty, t.borrow_date, t.due_date,
+                   t.return_date, t.condition_out, t.condition_in,
+                   t.note, t.equipment_id
+            FROM transactions t
+            JOIN equipment e ON t.equipment_id=e.id
+            JOIN borrowers b ON t.borrower_id=b.id
+            WHERE t.status='รอตรวจสอบ'
+            ORDER BY t.return_date ASC
+        """)
+
+        if df_wait.empty:
+            st.info("✅ ไม่มีรายการรอตรวจสอบ")
+        else:
+            st.warning(f"🔍 มี {len(df_wait)} รายการรอ Admin ตรวจสอบ")
+            for _, r in df_wait.iterrows():
+                od    = overdue_days(r["due_date"])
+                label = f"TX#{r['id']} | {r['code']} {r['name']} | {r['borrower']}"
+
+                with st.expander(label):
+                    c1, c2 = st.columns([1, 2])
+                    with c1:
+                        show_image(r["image_path"], width=80)
+                    with c2:
+                        st.markdown(
+                            f"📦 **{r['code']}** — {r['name']} ({r['qty']} ชิ้น)<br>"
+                            f"👤 {r['borrower']} ({r['type']}) {'📞 '+r['phone'] if r['phone'] else ''}<br>"
+                            f"📅 เบิก {r['borrow_date']} | กำหนดคืน <b>{r['due_date']}</b><br>"
+                            f"📅 แจ้งคืนวันที่: <b>{r['return_date']}</b>"
+                            + (f"<br><b style='color:red;'>⚠️ เกินกำหนด {od} วัน</b>" if od > 0 else ""),
+                            unsafe_allow_html=True)
+                        st.markdown(f"**สภาพตอนเบิก:** {r['condition_out']}")
+                        st.markdown(f"**สภาพที่แจ้งคืน:** {r['condition_in'] or '-'}")
+                        if r["note"]:
+                            st.caption(f"หมายเหตุ: {r['note']}")
+
+                    if is_admin():
+                        st.markdown("**Admin ตรวจสอบจริง:**")
+                        admin_condition = st.selectbox("สภาพอุปกรณ์จริงที่ตรวจสอบ",
+                                                       ["ปกติ", "มีรอยขีดข่วน", "ชำรุด", "สูญหาย"],
+                                                       key=f"ac_{r['id']}")
+                        admin_note = st.text_input("หมายเหตุ Admin", key=f"an_{r['id']}")
+
+                        col_ok, col_rej = st.columns(2)
+                        with col_ok:
+                            if st.button("✅ ยืนยันรับคืน", key=f"confirm_{r['id']}",
+                                         type="primary", use_container_width=True):
+                                note_final = f"[Admin: {admin_note}]" if admin_note else r["note"]
+                                execute("""UPDATE transactions SET condition_in=?,note=?,status='คืนแล้ว'
+                                           WHERE id=?""", (admin_condition, note_final, r["id"]))
+                                execute("UPDATE equipment SET available_qty=available_qty+? WHERE id=?",
+                                        (r["qty"], r["equipment_id"]))
+                                if admin_condition == "ชำรุด":
+                                    execute("UPDATE equipment SET status='ชำรุด' WHERE id=?", (r["equipment_id"],))
+                                elif admin_condition == "สูญหาย":
+                                    execute("UPDATE equipment SET status='สูญหาย',available_qty=available_qty-? WHERE id=?",
+                                            (r["qty"], r["equipment_id"]))
+                                else:
+                                    execute("UPDATE equipment SET status='พร้อมใช้' WHERE id=?", (r["equipment_id"],))
+                                st.success(f"✅ ยืนยันรับคืนแล้ว สภาพ: {admin_condition}")
+                                st.rerun()
+                        with col_rej:
+                            if st.button("↩️ ส่งกลับ (ยังไม่คืน)", key=f"reject_{r['id']}",
+                                         use_container_width=True):
+                                execute("UPDATE transactions SET status='ยืมอยู่', return_date=NULL, condition_in=NULL WHERE id=?",
+                                        (r["id"],))
+                                st.warning("↩️ ส่งกลับเป็นสถานะ ยืมอยู่ แล้ว")
+                                st.rerun()
+                    else:
+                        st.info("🔒 กรุณา Login Admin เพื่อยืนยันรับคืน")
 
 # ─── PAGE: REPORT ─────────────────────────────────────────────────────────────
 def page_report():
