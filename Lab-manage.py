@@ -344,23 +344,33 @@ def page_equipment():
                     if not code or not name:
                         st.error("กรุณากรอกรหัสและชื่ออุปกรณ์")
                     else:
-                        img_path = existing["image_path"] if existing is not None else None
-                        if uploaded:
-                            ext = uploaded.name.split(".")[-1]
-                            img_path = os.path.join(IMG_DIR, f"{code}.{ext}")
-                            with open(img_path, "wb") as f:
-                                f.write(uploaded.getbuffer())
-                        if existing is None:
-                            execute("""INSERT INTO equipment (code, name, category, total_qty, available_qty, status, image_path, description)
-                                       VALUES (?,?,?,?,?,?,?,?)""",
-                                    (code, name, category, total_qty, total_qty, status, img_path, description))
-                            st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                        # ตรวจสอบรหัสซ้ำ
+                        dup = query("SELECT id FROM equipment WHERE code=?", (code,))
+                        current_id = int(eq_id) if existing is not None else -1
+                        is_dup = not dup.empty and (existing is None or int(dup.iloc[0]["id"]) != current_id)
+                        if is_dup:
+                            st.error(f"❌ รหัสอุปกรณ์ '{code}' มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น")
                         else:
-                            execute("""UPDATE equipment SET code=?, name=?, category=?, total_qty=?,
-                                       status=?, image_path=?, description=? WHERE id=?""",
-                                    (code, name, category, total_qty, status, img_path, description, eq_id))
-                            st.success("✅ อัปเดตอุปกรณ์เรียบร้อย")
-                        st.rerun()
+                            try:
+                                img_path = existing["image_path"] if existing is not None else None
+                                if uploaded:
+                                    ext = uploaded.name.split(".")[-1]
+                                    img_path = os.path.join(IMG_DIR, f"{code}.{ext}")
+                                    with open(img_path, "wb") as fp:
+                                        fp.write(uploaded.getbuffer())
+                                if existing is None:
+                                    execute("""INSERT INTO equipment (code, name, category, total_qty, available_qty, status, image_path, description)
+                                               VALUES (?,?,?,?,?,?,?,?)""",
+                                            (code, name, category, total_qty, total_qty, status, img_path, description))
+                                    st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
+                                else:
+                                    execute("""UPDATE equipment SET code=?, name=?, category=?, total_qty=?,
+                                               status=?, image_path=?, description=? WHERE id=?""",
+                                            (code, name, category, total_qty, status, img_path, description, eq_id))
+                                    st.success("✅ อัปเดตอุปกรณ์เรียบร้อย")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
 # ─── PAGE: BORROW ─────────────────────────────────────────────────────────────
 def page_borrow():
