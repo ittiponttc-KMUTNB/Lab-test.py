@@ -366,7 +366,7 @@ def page_equipment():
                         opts_tmp = ["➕ เพิ่มใหม่"] + [f"{x['code']} — {x['name']}" for _, x in eq_list_tmp.iterrows()]
                         matched_tmp = [o for o in opts_tmp if o.startswith(r["code"] + " —")]
                         if matched_tmp:
-                            st.session_state["eq_edit_sel"] = matched_tmp[0]
+                            st.session_state["_next_sel"] = matched_tmp[0]
                         st.rerun()
                 with btn_col2:
                     if st.button("🗑️ ลบ", key=f"del_{r['id']}", use_container_width=True):
@@ -384,9 +384,9 @@ def page_equipment():
         eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
         options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
 
-        # eq_edit_sel ถูก set จากปุ่ม ✏️ แก้ไข ก่อน rerun แล้ว
-        if "eq_edit_sel" not in st.session_state:
-            st.session_state["eq_edit_sel"] = 0
+        # รับค่าจาก _next_sel (ตั้งก่อน rerun) แล้วโอนไป eq_edit_sel ก่อน render
+        if "_next_sel" in st.session_state:
+            st.session_state["eq_edit_sel"] = st.session_state.pop("_next_sel")
 
         choice = st.selectbox("เลือกรายการ", options, key="eq_edit_sel")
 
@@ -470,7 +470,7 @@ def page_equipment():
                                 (inp_code, inp_name, inp_cat, inp_qty, inp_qty,
                                  inp_stat, img_path, inp_desc))
                             st.success("✅ เพิ่มอุปกรณ์เรียบร้อย")
-                            st.session_state["eq_edit_sel"] = "➕ เพิ่มใหม่"
+                            st.session_state["_next_sel"] = "➕ เพิ่มใหม่"
                             st.rerun()
                         else:
                             old_total     = int(existing["total_qty"])
@@ -494,7 +494,7 @@ def page_equipment():
                                 elif diff < 0: msg += f" (ลด {diff} พร้อมใช้: {new_available})"
                                 st.success(msg)
                                 # refresh ฟอร์มด้วย code ใหม่
-                                st.session_state["eq_edit_sel"] = f"{inp_code} — {inp_name}"
+                                st.session_state["_next_sel"] = f"{inp_code} — {inp_name}"
                                 st.rerun()
                     except Exception as e:
                         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
