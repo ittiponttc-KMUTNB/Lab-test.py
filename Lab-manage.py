@@ -379,19 +379,14 @@ def page_equipment():
         eq_list = query("SELECT id, code, name FROM equipment ORDER BY code")
         options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in eq_list.iterrows()]
 
-        # ถ้ากดปุ่ม ✏️ แก้ไข จาก item → กระโดดไปที่รายการนั้นอัตโนมัติ
-        edit_code = st.session_state.get("edit_code", None)
-        default_idx = 0
+        # ถ้ากดปุ่ม ✏️ แก้ไข จาก item → set ค่าใน session_state โดยตรง
+        edit_code = st.session_state.pop("edit_code", None)
         if edit_code:
             matched = [i for i, o in enumerate(options) if o.startswith(edit_code + " —")]
             if matched:
-                default_idx = matched[0]
+                st.session_state["eq_edit_sel"] = matched[0]
 
-        choice = st.selectbox("เลือกรายการ", options, index=default_idx, key="eq_edit_sel")
-
-        # ล้าง session หลังจาก Dropdown โหลดค่าแล้ว
-        if edit_code:
-            del st.session_state["edit_code"]
+        choice = st.selectbox("เลือกรายการ", options, key="eq_edit_sel")
 
         existing, eq_id = None, None
         if choice != "➕ เพิ่มใหม่":
@@ -984,7 +979,7 @@ def footer():
     <div style="text-align:center; color:#888; font-size:0.82rem; padding:8px 0 16px 0; line-height:1.8;">
         🔬 ระบบบริหารจัดการเบิก-คืนอุปกรณ์ห้องปฏิบัติการ<br>
         พัฒนาโดย <b style="color:#1F4E79;">รศ.ดร.อิทธิพล มีผล</b><br>
-        ภาควิชาครุศาสตร์วิศวกรรม (วิศวกรรมโยธา) &nbsp;|&nbsp;
+        ภาควิชาครุศาสตร์โยธา &nbsp;|&nbsp;
         คณะครุศาสตร์อุตสาหกรรม<br>
         มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ (KMUTNB)
     </div>
