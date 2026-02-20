@@ -409,7 +409,7 @@ def page_equipment():
                 st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกรายการใหม่อีกครั้ง")
                 existing = None
 
-        # แสดงข้อมูลปัจจุบันก่อนฟอร์ม (ไม่ขึ้นกับ form state)
+        # แสดงข้อมูลปัจจุบันก่อนฟอร์ม
         if existing is not None:
             borrowed_now = int(existing["total_qty"]) - int(existing["available_qty"])
             st.markdown(
@@ -420,13 +420,14 @@ def page_equipment():
                 f'ยืมออก <b>{borrowed_now}</b>'
                 f'</div>', unsafe_allow_html=True)
 
-        with st.form("eq_form", clear_on_submit=False):
+        # key ของฟอร์มเปลี่ยนตาม eq_id → Streamlit สร้าง widget ใหม่ทุกครั้งที่เปลี่ยน item
+        form_key = f"eq_form_{eq_id if eq_id else 'new'}"
+        with st.form(form_key, clear_on_submit=False):
             code        = st.text_input("รหัสอุปกรณ์ *", value=existing["code"]        if existing is not None else "")
             name        = st.text_input("ชื่ออุปกรณ์ *",  value=existing["name"]        if existing is not None else "")
             category    = st.text_input("หมวดหมู่",        value=existing["category"]    if existing is not None else "")
             total_qty   = st.number_input("จำนวนทั้งหมด", min_value=1,
-                                          value=int(existing["total_qty"]) if existing is not None else 1,
-                                          key=f"total_qty_{eq_id if eq_id else 'new'}")
+                                          value=int(existing["total_qty"]) if existing is not None else 1)
             status_sel  = st.selectbox("สถานะ", ["พร้อมใช้","ชำรุด","สูญหาย"],
                                        index=["พร้อมใช้","ชำรุด","สูญหาย"].index(existing["status"])
                                        if existing is not None else 0)
