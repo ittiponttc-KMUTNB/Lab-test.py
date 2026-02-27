@@ -552,11 +552,44 @@ def page_borrow():
     # ── ข้อมูลผู้เบิก ──────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">👤 ขั้นตอนที่ 2 — ข้อมูลผู้เบิก</div>', unsafe_allow_html=True)
 
-    borrower_type = st.radio("ประเภทผู้เบิก", ["นักศึกษา", "บุคลากร/อาจารย์"], horizontal=True)
-    borrower_name = st.text_input("ชื่อ-นามสกุล *", placeholder="กรอกชื่อ-นามสกุล")
-    student_id    = st.text_input("รหัสนักศึกษา / รหัสพนักงาน", placeholder="เช่น 6601234567")
-    department    = st.text_input("ภาควิชา / หน่วยงาน")
-    phone         = st.text_input("เบอร์โทรศัพท์", placeholder="เช่น 081-234-5678")
+    # ── ค้นหาผู้ยืมเดิม ───────────────────────────────────────────────────────
+    recent_borrowers = query("""
+        SELECT DISTINCT b.id, b.name, b.type, b.student_id, b.department, b.phone
+        FROM borrowers b JOIN transactions t ON b.id = t.borrower_id
+        ORDER BY t.id DESC LIMIT 50
+    """)
+    search_borrower = st.text_input("🔍 ค้นหาผู้ยืมเดิม (ชื่อ / รหัส)",
+                                     placeholder="พิมพ์ชื่อหรือรหัสนักศึกษา หรือเว้นว่างเพื่อกรอกใหม่",
+                                     key="search_borrower")
+    selected_borrower = None
+    if search_borrower and not recent_borrowers.empty:
+        mask = (recent_borrowers["name"].str.contains(search_borrower, case=False, na=False) |
+                recent_borrowers["student_id"].astype(str).str.contains(search_borrower, case=False, na=False))
+        found = recent_borrowers[mask]
+        if not found.empty:
+            opts = {f"{r['name']} ({r['type']}) — {r['student_id'] or '-'}": r
+                    for _, r in found.iterrows()}
+            sel_label = st.selectbox("เลือกผู้ยืม", ["— กรอกข้อมูลใหม่ —"] + list(opts.keys()), key="sel_borrower")
+            if sel_label != "— กรอกข้อมูลใหม่ —":
+                selected_borrower = opts[sel_label]
+                st.success(f"✅ ดึงข้อมูล {selected_borrower['name']} เรียบร้อย")
+        else:
+            st.caption("ไม่พบผู้ยืมเดิม — กรอกข้อมูลใหม่ด้านล่าง")
+
+    sv = selected_borrower
+    borrower_type = st.radio("ประเภทผู้เบิก", ["นักศึกษา", "บุคลากร/อาจารย์"], horizontal=True,
+                              index=0 if sv is None or sv["type"] == "นักศึกษา" else 1)
+    borrower_name = st.text_input("ชื่อ-นามสกุล *",
+                                   value=sv["name"] if sv is not None else "",
+                                   placeholder="กรอกชื่อ-นามสกุล")
+    student_id    = st.text_input("รหัสนักศึกษา / รหัสพนักงาน",
+                                   value=str(sv["student_id"]) if sv is not None and sv["student_id"] else "",
+                                   placeholder="เช่น 6601234567")
+    department    = st.text_input("ภาควิชา / หน่วยงาน",
+                                   value=str(sv["department"]) if sv is not None and sv["department"] else "")
+    phone         = st.text_input("เบอร์โทรศัพท์ *",
+                                   value=str(sv["phone"]) if sv is not None and sv["phone"] else "",
+                                   placeholder="เช่น 081-234-5678")
     st.divider()
 
     # ── วันที่ ─────────────────────────────────────────────────────────────────
@@ -572,6 +605,8 @@ def page_borrow():
     if st.button("📋 ตรวจสอบก่อนเบิก", type="primary", use_container_width=True):
         if not borrower_name.strip():
             st.error("❌ กรุณากรอกชื่อผู้เบิก")
+        elif not phone.strip():
+            st.error("❌ กรุณากรอกเบอร์โทรศัพท์")
         elif due_date < borrow_date:
             st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
         else:
@@ -633,7 +668,9 @@ def page_return():
     st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">✅ คืนอุปกรณ์</p>', unsafe_allow_html=True)
 
     # ── Tab: แจ้งคืน (ทุกคน) vs รอตรวจสอบ (Admin ยืนยัน) ──────────────────
-    tab1, tab2 = st.tabs(["📬 แจ้งคืนอุปกรณ์", f"🔍 รอตรวจสอบ {'(Admin)' if is_admin() else ''}"])
+    n_pending = query("SELECT COUNT(*) as n FROM transactions WHERE status='รอตรวจสอบ'").iloc[0]["n"]
+    pending_label = f"🔍 รอตรวจสอบ ({n_pending})" if n_pending > 0 else "🔍 รอตรวจสอบ"
+    tab1, tab2 = st.tabs(["📬 แจ้งคืนอุปกรณ์", pending_label])
 
     # ── TAB 1: ผู้เบิกแจ้งคืน ────────────────────────────────────────────────
     with tab1:
