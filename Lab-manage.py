@@ -162,6 +162,7 @@ def execute(sql, params=()):
     conn.commit()
     last_id = c.lastrowid
     conn.close()
+    get_nav_stats.clear()   # ✅ ล้าง cache ทุกครั้งที่มีการเขียน DB
     return last_id
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ def img_b64(path):
     try:
         with open(path, "rb") as f:
             return base64.b64encode(f.read()).decode()
-    except:
+    except (FileNotFoundError, OSError):
         return None
 
 def show_image(image_path, width=100):
@@ -177,8 +178,12 @@ def show_image(image_path, width=100):
     w_style = f"{width}px" if isinstance(width, int) else width
     if image_path and os.path.exists(image_path):
         b64 = img_b64(image_path)
+        # ✅ FIX 1: ตรวจ extension เพื่อใช้ MIME type ที่ถูกต้อง
+        ext  = os.path.splitext(image_path)[1].lower().lstrip(".")
+        mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png",
+                "gif": "gif", "webp": "webp"}.get(ext, "png")
         st.markdown(
-            f'<img src="data:image/png;base64,{b64}" '
+            f'<img src="data:image/{mime};base64,{b64}" '
             f'style="width:{w_style};max-width:100%;border-radius:8px;border:1px solid #ddd;object-fit:contain;">',
             unsafe_allow_html=True)
     else:
@@ -201,11 +206,21 @@ def overdue_days(due_str):
         d = datetime.strptime(due_str, "%Y-%m-%d").date()
         delta = (date.today() - d).days
         return max(delta, 0)
-    except:
+    except (ValueError, TypeError):
         return 0
 
-# ─── NAVIGATION ───────────────────────────────────────────────────────────────
-PAGES = [("🏠","Dashboard"), ("📦","อุปกรณ์"), ("➕","เบิก"), ("✅","คืน"), ("📋","รายงาน"), ("⚙️","ตั้งค่า")]
+# ─── CACHED QUERIES ───────────────────────────────────────────────────────────
+@st.cache_data(ttl=30)
+def get_nav_stats():
+    """Stats สำหรับ sidebar — cache 30 วินาที"""
+    conn = get_conn()
+    c = conn.cursor()
+    n_eq   = c.execute("SELECT COUNT(*) FROM equipment").fetchone()[0]
+    n_borr = c.execute("SELECT COUNT(*) FROM transactions WHERE status='ยืมอยู่'").fetchone()[0]
+    n_over = c.execute("SELECT COUNT(*) FROM transactions WHERE status='ยืมอยู่' AND due_date < date('now')").fetchone()[0]
+    conn.close()
+    return n_eq, n_borr, n_over
+
 
 def nav():
     if "page" not in st.session_state:
@@ -214,18 +229,9 @@ def nav():
     with st.sidebar:
         st.markdown("## 🔬 ระบบอุปกรณ์ Lab")
         st.markdown("---")
-        for icon, name in PAGES:
-            active = st.session_state.page == name
-            if st.button(f"{icon} {name}", use_container_width=True,
-                         type="primary" if active else "secondary", key=f"snav_{name}"):
-                st.session_state.page = name
-                st.rerun()
-        st.markdown("---")
         admin_login_widget()
         st.markdown("---")
-        n_eq   = query("SELECT COUNT(*) as n FROM equipment").iloc[0]["n"]
-        n_borr = query("SELECT COUNT(*) as n FROM transactions WHERE status='ยืมอยู่'").iloc[0]["n"]
-        n_over = query("SELECT COUNT(*) as n FROM transactions WHERE status='ยืมอยู่' AND due_date < date('now')").iloc[0]["n"]
+        n_eq, n_borr, n_over = get_nav_stats()
         st.metric("📦 อุปกรณ์", n_eq)
         st.metric("🔄 กำลังยืม", n_borr)
         if n_over > 0:
@@ -403,7 +409,7 @@ def page_equipment():
                     eq_id    = int(existing["id"])
                 else:
                     st.warning("⚠️ ไม่พบอุปกรณ์นี้ กรุณาเลือกใหม่")
-            except:
+            except (IndexError, KeyError, ValueError):
                 st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกใหม่")
 
         if existing is not None:
@@ -562,27 +568,65 @@ def page_borrow():
     note          = st.text_area("หมายเหตุ (ถ้ามี)")
     st.divider()
 
-    if st.button("✅ ยืนยันการเบิก", type="primary", use_container_width=True):
+    # ── Confirmation Dialog ────────────────────────────────────────────────────
+    if st.button("📋 ตรวจสอบก่อนเบิก", type="primary", use_container_width=True):
         if not borrower_name.strip():
             st.error("❌ กรุณากรอกชื่อผู้เบิก")
         elif due_date < borrow_date:
             st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
         else:
-            b_id = execute("""INSERT INTO borrowers (name,type,student_id,department,phone)
-                               VALUES (?,?,?,?,?)""",
-                           (borrower_name.strip(), borrower_type, student_id, department, phone))
-            execute("""INSERT INTO transactions
-                       (equipment_id,borrower_id,qty,borrow_date,due_date,condition_out,note)
-                       VALUES (?,?,?,?,?,?,?)""",
-                    (eq_id, b_id, qty, str(borrow_date), str(due_date), condition_out, note))
-            execute("UPDATE equipment SET available_qty=available_qty-? WHERE id=?", (qty, eq_id))
-            st.success(
-                f"✅ บันทึกสำเร็จ!\n\n"
-                f"👤 **{borrower_name}**\n"
-                f"📦 {eq_row['name']} จำนวน {qty} ชิ้น\n"
-                f"📅 กำหนดคืน: {due_date}"
-            )
-            st.balloons()
+            st.session_state["borrow_pending"] = {
+                "eq_id": eq_id, "eq_name": eq_row["name"], "eq_code": eq_row["code"],
+                "qty": qty, "borrower_name": borrower_name.strip(),
+                "borrower_type": borrower_type, "student_id": student_id,
+                "department": department, "phone": phone,
+                "borrow_date": str(borrow_date), "due_date": str(due_date),
+                "condition_out": condition_out, "note": note,
+            }
+
+    if "borrow_pending" in st.session_state:
+        p = st.session_state["borrow_pending"]
+        st.markdown("---")
+        st.markdown("""
+        <div style="background:#EBF3FB;border-left:4px solid #1F4E79;
+                    border-radius:8px;padding:14px 18px;line-height:2;">
+            <b style="font-size:1.05rem;color:#1F4E79;">📋 ยืนยันข้อมูลการเบิก</b><br>
+        """ + f"""
+            📦 <b>{p['eq_code']}</b> — {p['eq_name']} &nbsp; จำนวน <b>{p['qty']} ชิ้น</b><br>
+            👤 <b>{p['borrower_name']}</b> ({p['borrower_type']})<br>
+            📅 วันเบิก <b>{p['borrow_date']}</b> &nbsp;|&nbsp; กำหนดคืน <b>{p['due_date']}</b><br>
+            🔧 สภาพ: {p['condition_out']}
+            {"<br>📝 หมายเหตุ: "+p['note'] if p['note'] else ""}
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("")
+
+        c_ok, c_cancel = st.columns(2)
+        with c_ok:
+            if st.button("✅ ยืนยันเบิกเลย", type="primary", use_container_width=True):
+                b_id = execute("""INSERT INTO borrowers (name,type,student_id,department,phone)
+                                   VALUES (?,?,?,?,?)""",
+                               (p["borrower_name"], p["borrower_type"], p["student_id"],
+                                p["department"], p["phone"]))
+                execute("""INSERT INTO transactions
+                           (equipment_id,borrower_id,qty,borrow_date,due_date,condition_out,note)
+                           VALUES (?,?,?,?,?,?,?)""",
+                        (p["eq_id"], b_id, p["qty"], p["borrow_date"], p["due_date"],
+                         p["condition_out"], p["note"]))
+                execute("UPDATE equipment SET available_qty=available_qty-? WHERE id=?",
+                        (p["qty"], p["eq_id"]))
+                del st.session_state["borrow_pending"]
+                st.success(
+                    f"✅ บันทึกสำเร็จ!\n\n"
+                    f"👤 **{p['borrower_name']}**\n"
+                    f"📦 {p['eq_name']} จำนวน {p['qty']} ชิ้น\n"
+                    f"📅 กำหนดคืน: {p['due_date']}"
+                )
+                st.balloons()
+        with c_cancel:
+            if st.button("❌ แก้ไขข้อมูล", use_container_width=True):
+                del st.session_state["borrow_pending"]
+                st.rerun()
 
 # ─── PAGE: RETURN ─────────────────────────────────────────────────────────────
 def page_return():
@@ -643,12 +687,46 @@ def page_return():
                                                 key=f"ci_{r['id']}")
                     return_note  = st.text_input("หมายเหตุ", key=f"rn_{r['id']}")
 
-                    if st.button("📬 แจ้งคืนอุปกรณ์", key=f"notify_{r['id']}",
+                    if st.button("📋 ตรวจสอบก่อนแจ้งคืน", key=f"notify_{r['id']}",
                                  type="primary", use_container_width=True):
-                        execute("""UPDATE transactions SET return_date=?,condition_in=?,note=?,status='รอตรวจสอบ'
-                                   WHERE id=?""", (str(return_date), condition_in, return_note, r["id"]))
-                        st.success("📬 แจ้งคืนเรียบร้อยแล้ว! กรุณารอ Admin ตรวจสอบและยืนยัน")
-                        st.rerun()
+                        st.session_state[f"return_pending_{r['id']}"] = {
+                            "tx_id": r["id"], "eq_code": r["code"], "eq_name": r["name"],
+                            "borrower": r["borrower"], "qty": r["qty"],
+                            "return_date": str(return_date),
+                            "condition_in": condition_in, "note": return_note,
+                        }
+
+                    if f"return_pending_{r['id']}" in st.session_state:
+                        p = st.session_state[f"return_pending_{r['id']}"]
+                        st.markdown("""
+                        <div style="background:#FFF8E1;border-left:4px solid #FFC107;
+                                    border-radius:8px;padding:14px 18px;line-height:2;">
+                            <b style="font-size:1.05rem;color:#856404;">📋 ยืนยันการแจ้งคืน</b><br>
+                        """ + f"""
+                            📦 <b>{p['eq_code']}</b> — {p['eq_name']} ({p['qty']} ชิ้น)<br>
+                            👤 <b>{p['borrower']}</b><br>
+                            📅 วันที่นำมาคืน: <b>{p['return_date']}</b><br>
+                            🔧 สภาพที่คืน: <b>{p['condition_in']}</b>
+                            {"<br>📝 หมายเหตุ: "+p['note'] if p['note'] else ""}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.markdown("")
+                        c_ok, c_cancel = st.columns(2)
+                        with c_ok:
+                            if st.button("✅ ยืนยันแจ้งคืน", key=f"confirm_ret_{r['id']}",
+                                         type="primary", use_container_width=True):
+                                execute("""UPDATE transactions
+                                           SET return_date=?,condition_in=?,note=?,status='รอตรวจสอบ'
+                                           WHERE id=?""",
+                                        (p["return_date"], p["condition_in"], p["note"], p["tx_id"]))
+                                del st.session_state[f"return_pending_{r['id']}"]
+                                st.success("📬 แจ้งคืนเรียบร้อยแล้ว! กรุณารอ Admin ตรวจสอบและยืนยัน")
+                                st.rerun()
+                        with c_cancel:
+                            if st.button("❌ แก้ไขข้อมูล", key=f"cancel_ret_{r['id']}",
+                                         use_container_width=True):
+                                del st.session_state[f"return_pending_{r['id']}"]
+                                st.rerun()
 
     # ── TAB 2: Admin ตรวจสอบและยืนยัน ───────────────────────────────────────
     with tab2:
@@ -885,8 +963,8 @@ def page_settings():
                                  eq.get("available_qty",1), eq.get("status","พร้อมใช้"),
                                  eq.get("image_path"), eq.get("description")))
                             imported += 1
-                        except:
-                            pass
+                        except sqlite3.IntegrityError:
+                            pass  # รหัสอุปกรณ์ซ้ำ ข้ามไป
 
                     if "ทั้งหมด" in import_mode:
                         # Import borrowers
@@ -913,8 +991,8 @@ def page_settings():
                                          tx.get("borrow_date"), tx.get("due_date"), tx.get("return_date"),
                                          tx.get("condition_out","ปกติ"), tx.get("condition_in"),
                                          tx.get("note"), tx.get("status","คืนแล้ว")))
-                            except:
-                                pass
+                            except (sqlite3.Error, KeyError):
+                                pass  # ข้าม transaction ที่ข้อมูลไม่สมบูรณ์
 
                     conn.commit()
                     conn.close()
