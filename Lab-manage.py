@@ -333,12 +333,12 @@ def upload_image(file_obj, public_id):
         st.error(f"❌ อัพโหลดรูปไม่สำเร็จ: {e}")
         return None
 
-def optimized_url(original_url, width=400, height=300):
+def optimized_url(original_url, width=400, height=300, crop="fill"):
     """[FIX #2] สร้าง URL ที่ optimize แล้วจาก Cloudinary URL ต้นฉบับ"""
     if not original_url or not isinstance(original_url, str) or "cloudinary" not in original_url:
         return original_url
     return original_url.replace(
-        "/upload/", f"/upload/w_{width},h_{height},c_fill,q_auto,f_auto/"
+        "/upload/", f"/upload/w_{width},h_{height},c_{crop},q_auto,f_auto/"
     )
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -394,7 +394,7 @@ def nav():
     # ── [FIX #9] Header พร้อมโลโก้ TTC ─────────────────────────────────────
     logo_html = ""
     if LOGO_URL:
-        logo_opt = optimized_url(LOGO_URL, 120, 120) if "cloudinary" in LOGO_URL else LOGO_URL
+        logo_opt = optimized_url(LOGO_URL, 140, 140, crop="fit") if "cloudinary" in LOGO_URL else LOGO_URL
         logo_html = f'<img src="{logo_opt}" style="width:70px;height:auto;margin-bottom:4px;" loading="lazy"><br>'
 
     st.markdown(
