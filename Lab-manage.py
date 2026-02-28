@@ -375,7 +375,7 @@ def overdue_days(due_str):
         d = datetime.strptime(str(due_str), "%Y-%m-%d").date()
         delta = (date.today() - d).days
         return max(delta, 0)
-    except:
+    except (ValueError, TypeError):
         return 0
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -387,9 +387,20 @@ def nav():
     if "page" not in st.session_state:
         st.session_state.page = "Dashboard"
 
-    # Sidebar — เฉพาะ Admin Login เท่านั้น (ไม่มีเมนูซ้ำ)
+    # Sidebar — Admin Login + สรุปข้อมูล
     with st.sidebar:
+        st.markdown("## 🔬 ระบบอุปกรณ์ Lab")
+        st.markdown("---")
         admin_login_widget()
+        st.markdown("---")
+        try:
+            n_eq, avail, n_borr, n_over = load_sidebar_stats()
+            st.metric("📦 อุปกรณ์", n_eq)
+            st.metric("🔄 กำลังยืม", n_borr)
+            if n_over > 0:
+                st.error(f"⚠️ เกินกำหนด {n_over} รายการ")
+        except Exception:
+            st.caption("⏳ กำลังโหลด...")
 
     # ── [FIX #9] Header พร้อมโลโก้ TTC ─────────────────────────────────────
     logo_html = ""
@@ -579,7 +590,7 @@ def page_equipment():
                     eq_id = int(existing["id"])
                 else:
                     st.warning("⚠️ ไม่พบอุปกรณ์นี้ กรุณาเลือกใหม่")
-            except:
+            except Exception:
                 st.warning("⚠️ เกิดข้อผิดพลาด กรุณาเลือกใหม่")
 
         if existing is not None:
@@ -608,7 +619,7 @@ def page_equipment():
             sv_desc = st.text_area("รายละเอียด",
                 value=str(existing["description"] or "") if existing is not None else "")
             sv_img = st.file_uploader(f"📷 รูปอุปกรณ์ (สูงสุด {MAX_UPLOAD_MB} MB)",
-                                       type=["jpg","jpeg","png"])
+                                       type=["jpg","jpeg","png","gif"])
 
             if existing is not None and existing.get("image_url"):
                 st.caption("รูปปัจจุบัน:")
@@ -736,7 +747,7 @@ def page_borrow():
     borrower_name = st.text_input("ชื่อ-นามสกุล *", placeholder="กรอกชื่อ-นามสกุล")
     student_id = st.text_input("รหัสนักศึกษา / รหัสพนักงาน", placeholder="เช่น 6601234567")
     department = st.text_input("ภาควิชา / หน่วยงาน")
-    phone = st.text_input("เบอร์โทรศัพท์", placeholder="เช่น 081-234-5678")
+    phone = st.text_input("เบอร์โทรศัพท์ *", placeholder="เช่น 081-234-5678")
     st.divider()
 
     st.markdown('<div class="section-header">📅 ขั้นตอนที่ 3 — วันที่</div>', unsafe_allow_html=True)
@@ -749,6 +760,8 @@ def page_borrow():
     if st.button("✅ ยืนยันการเบิก", type="primary", use_container_width=True):
         if not borrower_name.strip():
             st.error("❌ กรุณากรอกชื่อผู้เบิก")
+        elif not phone.strip():
+            st.error("❌ กรุณากรอกเบอร์โทรศัพท์")
         elif due_date < borrow_date:
             st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
         else:
@@ -784,7 +797,12 @@ def page_borrow():
 def page_return():
     st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">✅ คืนอุปกรณ์</p>', unsafe_allow_html=True)
 
-    tab1, tab2 = st.tabs(["📬 แจ้งคืนอุปกรณ์", f"🔍 รอตรวจสอบ {'(Admin)' if is_admin() else ''}"])
+    # นับจำนวนรอตรวจสอบ
+    df_pending = load_pending_transactions_enriched()
+    n_pending = len(df_pending)
+    tab2_label = f"🔍 รอตรวจสอบ ({n_pending})"
+
+    tab1, tab2 = st.tabs(["📬 แจ้งคืนอุปกรณ์", tab2_label])
 
     # ── TAB 1: ผู้เบิกแจ้งคืน ────────────────────────────────────────────
     with tab1:
@@ -843,8 +861,7 @@ def page_return():
 
     # ── TAB 2: Admin ตรวจสอบ ─────────────────────────────────────────────
     with tab2:
-        # [FIX #1] batch fetch
-        df_wait = load_pending_transactions_enriched()
+        df_wait = df_pending
 
         if df_wait.empty:
             st.info("✅ ไม่มีรายการรอตรวจสอบ")
@@ -1063,7 +1080,7 @@ def page_settings():
                                     "description": eq.get("description")
                                 })
                                 imported += 1
-                        except:
+                        except Exception:
                             pass
 
                     if "ทั้งหมด" in import_mode:
@@ -1095,7 +1112,7 @@ def page_settings():
                                         "note": tx.get("note"),
                                         "status": tx.get("status", "คืนแล้ว")
                                     })
-                            except:
+                            except Exception:
                                 pass
 
                     load_sidebar_stats.clear()
