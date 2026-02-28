@@ -37,7 +37,7 @@ st.set_page_config(
 
 SUPABASE_URL   = st.secrets["supabase"]["url"]
 SUPABASE_KEY   = st.secrets["supabase"]["key"]
-ADMIN_PASSWORD = st.secrets.get("app", {}).get("admin_password", "admin1234")
+ADMIN_PASSWORD = st.secrets["app"]["admin_password"]
 LOGO_URL       = st.secrets.get("app", {}).get("logo_url", "")
 
 cloudinary.config(
@@ -127,7 +127,10 @@ def query_table(table, select="*", filters=None, order=None, limit=None):
         q = sb.table(table).select(select)
         if filters:
             for col, op, val in filters:
-                q = getattr(q, op if op != "is" else "is_")(col, val)
+                if op == "in_":
+                    q = q.in_(col, val)
+                else:
+                    q = getattr(q, op if op != "is" else "is_")(col, val)
         if order:
             for col_name, opts in order:
                 q = q.order(col_name, **opts)
@@ -211,19 +214,16 @@ def load_pending_transactions_enriched():
     return _enrich_transactions(df_tx)
 
 def _enrich_transactions(df_tx):
-    """Batch fetch equipment + borrowers แล้ว merge — ไม่ query ใน loop"""
+    """Batch fetch equipment + borrowers เฉพาะ id ที่ต้องการ แล้ว merge"""
     eq_ids = df_tx["equipment_id"].unique().tolist()
     br_ids = df_tx["borrower_id"].unique().tolist()
 
-    # ดึง equipment ทั้งหมดที่เกี่ยวข้อง (1 query)
-    df_eq = query_table("equipment", select="id,code,name,image_url,category")
-    if not df_eq.empty:
-        df_eq = df_eq[df_eq["id"].isin(eq_ids)]
+    # ดึงเฉพาะ id ที่เกี่ยวข้อง (ไม่ดึงทั้ง table)
+    df_eq = query_table("equipment", select="id,code,name,image_url,category",
+                        filters=[("id", "in_", eq_ids)]) if eq_ids else pd.DataFrame()
 
-    # ดึง borrowers ทั้งหมดที่เกี่ยวข้อง (1 query)
-    df_br = query_table("borrowers", select="id,name,type,phone,student_id,department")
-    if not df_br.empty:
-        df_br = df_br[df_br["id"].isin(br_ids)]
+    df_br = query_table("borrowers", select="id,name,type,phone,student_id,department",
+                        filters=[("id", "in_", br_ids)]) if br_ids else pd.DataFrame()
 
     # Merge: transactions ← equipment ← borrowers
     merged = df_tx.merge(
@@ -248,8 +248,10 @@ def load_report_data(date_from, date_to, status_filter):
     if df_tx.empty:
         return pd.DataFrame()
 
-    df_eq = query_table("equipment", select="id,code,name")
-    df_br = query_table("borrowers", select="id,name,type,student_id,department,phone")
+    df_eq = query_table("equipment", select="id,code,name",
+                        filters=[("id", "in_", df_tx["equipment_id"].unique().tolist())])
+    df_br = query_table("borrowers", select="id,name,type,student_id,department,phone",
+                        filters=[("id", "in_", df_tx["borrower_id"].unique().tolist())])
 
     merged = df_tx.merge(
         df_eq.rename(columns={"id": "eq_id", "name": "eq_name", "code": "eq_code"}),
@@ -766,13 +768,26 @@ def page_borrow():
             st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
         else:
             try:
-                borr = insert_row("borrowers", {
-                    "name": borrower_name.strip(), "type": borrower_type,
-                    "student_id": student_id or None, "department": department or None,
-                    "phone": phone or None
-                })
+                # Fix 7: หา borrower ที่มีอยู่แล้ว (by phone) ไม่สร้างซ้ำ
+                existing_borr = query_table("borrowers", select="id",
+                                            filters=[("phone", "eq", phone.strip())])
+                if not existing_borr.empty:
+                    borr_id = int(existing_borr.iloc[0]["id"])
+                    # อัพเดทข้อมูลล่าสุด
+                    update_rows("borrowers", {
+                        "name": borrower_name.strip(), "type": borrower_type,
+                        "student_id": student_id or None, "department": department or None
+                    }, "id", borr_id)
+                else:
+                    borr = insert_row("borrowers", {
+                        "name": borrower_name.strip(), "type": borrower_type,
+                        "student_id": student_id or None, "department": department or None,
+                        "phone": phone.strip()
+                    })
+                    borr_id = borr["id"]
+
                 insert_row("transactions", {
-                    "equipment_id": eq_id, "borrower_id": borr["id"],
+                    "equipment_id": eq_id, "borrower_id": borr_id,
                     "qty": qty, "borrow_date": str(borrow_date),
                     "due_date": str(due_date), "condition_out": condition_out,
                     "note": note or None, "status": "ยืมอยู่"
@@ -909,18 +924,24 @@ def page_return():
                                 cur_eq = query_table("equipment", select="available_qty",
                                                      filters=[("id","eq",r["equipment_id"])])
                                 if not cur_eq.empty:
-                                    new_avail = int(cur_eq.iloc[0]["available_qty"]) + int(r["qty"])
-                                    eq_update = {"available_qty": new_avail}
+                                    cur_avail = int(cur_eq.iloc[0]["available_qty"])
+                                    qty_returned = int(r["qty"])
 
-                                    if admin_condition == "ชำรุด":
-                                        eq_update["status"] = "ชำรุด"
-                                    elif admin_condition == "สูญหาย":
-                                        eq_update["status"] = "สูญหาย"
-                                        eq_update["available_qty"] = new_avail - int(r["qty"])
+                                    # Fix 8: logic ชัดเจน — สูญหาย = ไม่ได้คืนจริง
+                                    if admin_condition == "สูญหาย":
+                                        available_delta = 0  # ไม่เพิ่ม available
+                                        new_status = "สูญหาย"
+                                    elif admin_condition == "ชำรุด":
+                                        available_delta = qty_returned  # คืนแต่ชำรุด
+                                        new_status = "ชำรุด"
                                     else:
-                                        eq_update["status"] = "พร้อมใช้"
+                                        available_delta = qty_returned  # คืนปกติ
+                                        new_status = "พร้อมใช้"
 
-                                    update_rows("equipment", eq_update, "id", r["equipment_id"])
+                                    update_rows("equipment", {
+                                        "available_qty": cur_avail + available_delta,
+                                        "status": new_status
+                                    }, "id", r["equipment_id"])
 
                                 load_sidebar_stats.clear()
                                 st.success(f"✅ ยืนยันรับคืนแล้ว สภาพ: {admin_condition}")
