@@ -400,7 +400,7 @@ def nav():
     st.markdown(
         f'<div style="text-align:center; margin-bottom:10px;">'
         f'{logo_html}'
-        f'<span style="font-size:1.3rem; font-weight:700; color:#1F4E79;">'
+        f'<span style="font-size:1.05rem; font-weight:700; color:#1F4E79; white-space:nowrap;">'
         f'ระบบบริหารจัดการห้องปฏิบัติการ TTC</span><br>'
         f'<span style="font-size:0.82rem; color:#888;">'
         f'ภาควิชาครุศาสตร์โยธา — มจพ.</span></div>',
