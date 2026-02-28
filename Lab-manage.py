@@ -397,17 +397,15 @@ def nav():
         logo_opt = optimized_url(LOGO_URL, 120, 120) if "cloudinary" in LOGO_URL else LOGO_URL
         logo_html = f'<img src="{logo_opt}" style="width:70px;height:auto;margin-bottom:4px;" loading="lazy"><br>'
 
-    st.markdown(f"""
-    <div style="text-align:center; margin-bottom:10px;">
-        {logo_html}
-        <span style="font-size:1.3rem; font-weight:700; color:#1F4E79;">
-            ระบบบริหารจัดการห้องปฏิบัติการ TTC
-        </span><br>
-        <span style="font-size:0.82rem; color:#888;">
-            ภาควิชาครุศาสตร์โยธา — มจพ.
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="text-align:center; margin-bottom:10px;">'
+        f'{logo_html}'
+        f'<span style="font-size:1.3rem; font-weight:700; color:#1F4E79;">'
+        f'ระบบบริหารจัดการห้องปฏิบัติการ TTC</span><br>'
+        f'<span style="font-size:0.82rem; color:#888;">'
+        f'ภาควิชาครุศาสตร์โยธา — มจพ.</span></div>',
+        unsafe_allow_html=True
+    )
 
     # ── Top nav bar ────────────────────────────────────────────────────────
     NAV_ITEMS = [
