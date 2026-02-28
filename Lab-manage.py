@@ -387,28 +387,9 @@ def nav():
     if "page" not in st.session_state:
         st.session_state.page = "Dashboard"
 
+    # Sidebar — เฉพาะ Admin Login เท่านั้น (ไม่มีเมนูซ้ำ)
     with st.sidebar:
-        st.markdown("## 🔬 ระบบอุปกรณ์ Lab")
-        st.markdown("---")
-        for icon, name in PAGES:
-            active = st.session_state.page == name
-            if st.button(f"{icon} {name}", use_container_width=True,
-                         type="primary" if active else "secondary", key=f"snav_{name}"):
-                st.session_state.page = name
-                st.rerun()
-        st.markdown("---")
         admin_login_widget()
-        st.markdown("---")
-
-        # [FIX #3] Sidebar stats cached 30 วินาที
-        try:
-            n_eq, avail, n_borr, n_over = load_sidebar_stats()
-            st.metric("📦 อุปกรณ์", n_eq)
-            st.metric("🔄 กำลังยืม", n_borr)
-            if n_over > 0:
-                st.error(f"⚠️ เกินกำหนด {n_over} รายการ")
-        except Exception:
-            st.caption("⏳ กำลังโหลด...")
 
     # ── [FIX #9] Header พร้อมโลโก้ TTC ─────────────────────────────────────
     logo_html = ""
