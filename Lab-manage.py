@@ -345,10 +345,10 @@ def optimized_url(original_url, width=400, height=300, crop="fill"):
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 def show_image(image_url, width=100, size="preview"):
-    """[FIX #2] แสดงรูปพร้อม Cloudinary optimization"""
+    """แสดงรูปพร้อม Cloudinary optimization — ใช้ c_pad ไม่ตัดรูป"""
     SIZES = {"thumb": (200, 150), "preview": (400, 300), "full": (800, 600)}
     w_img, h_img = SIZES.get(size, (400, 300))
-    opt_url = optimized_url(image_url, w_img, h_img)
+    opt_url = optimized_url(image_url, w_img, h_img, crop="pad")
 
     w_style = f"{width}px" if isinstance(width, int) else width
     if opt_url and isinstance(opt_url, str) and opt_url.startswith("http"):
@@ -485,7 +485,7 @@ def page_dashboard():
             st.markdown(f"""
             <div class="eq-card" style="border-left:4px solid {bc};">
                 <b>{r['eq_code']}</b> — {r['eq_name']}<br>
-                👤 {r['br_name']} ({r['br_type']}) &nbsp; 📦 {r['qty']} ชิ้น<br>
+                👤 {r['br_name']} ({r['br_type']}) &nbsp; 📦 {r['qty']}<br>
                 📅 เบิก {r['borrow_date']} | คืน <b>{r['due_date']}</b>
                 {"&nbsp;<b style='color:red;'>⚠️ เกิน "+str(od)+" วัน</b>" if od > 0 else ""}
             </div>""", unsafe_allow_html=True)
@@ -664,7 +664,7 @@ def page_equipment():
                             diff = int(sv_qty) - old_total
                             new_available = old_available + diff
                             if new_available < 0:
-                                st.error(f"❌ ลดจำนวนไม่ได้! ยืมออกอยู่ {borrowed} ชิ้น")
+                                st.error(f"❌ ลดจำนวนไม่ได้! ยืมออกอยู่ {borrowed}")
                                 st.stop()
                             update_rows("equipment", {
                                 "code": sv_code, "name": sv_name,
@@ -736,7 +736,7 @@ def page_borrow():
     with c_info:
         st.markdown(f"**{eq_row['code']}** — {eq_row['name']}")
         st.markdown(f"หมวด: {eq_row['category'] or '-'}")
-        st.markdown(f"คงเหลือ: **{eq_row['available_qty']}** ชิ้น")
+        st.markdown(f"คงเหลือ: **{eq_row['available_qty']}**")
         if eq_row.get("description"):
             st.caption(eq_row["description"])
 
@@ -799,7 +799,7 @@ def page_borrow():
                 st.success(
                     f"✅ บันทึกสำเร็จ!\n\n"
                     f"👤 **{borrower_name}**\n"
-                    f"📦 {eq_row['name']} จำนวน {qty} ชิ้น\n"
+                    f"📦 {eq_row['name']} จำนวน {qty}\n"
                     f"📅 กำหนดคืน: {due_date}"
                 )
                 st.balloons()
@@ -851,7 +851,7 @@ def page_return():
                         show_image(r.get("eq_image_url"), width="100%", size="preview")
                     with c2:
                         st.markdown(
-                            f"📦 **{r['eq_code']}** — {r['eq_name']} ({r['qty']} ชิ้น)<br>"
+                            f"📦 **{r['eq_code']}** — {r['eq_name']} ({r['qty']})<br>"
                             f"👤 {r['br_name']} ({r['br_type']})<br>"
                             f"📅 เบิก {r['borrow_date']} | คืน <b>{r['due_date']}</b>"
                             + (f"<br><b style='color:red;'>⚠️ เกิน {od} วัน</b>" if od > 0 else ""),
@@ -893,7 +893,7 @@ def page_return():
                     with c2:
                         phone_str = f"📞 {r['br_phone']}" if pd.notna(r.get('br_phone')) and r.get('br_phone') else ""
                         st.markdown(
-                            f"📦 **{r['eq_code']}** — {r['eq_name']} ({r['qty']} ชิ้น)<br>"
+                            f"📦 **{r['eq_code']}** — {r['eq_name']} ({r['qty']})<br>"
                             f"👤 {r['br_name']} ({r['br_type']}) {phone_str}<br>"
                             f"📅 เบิก {r['borrow_date']} | กำหนดคืน <b>{r['due_date']}</b><br>"
                             f"📅 แจ้งคืนวันที่: <b>{r.get('return_date','')}</b>"
