@@ -238,7 +238,7 @@ def _enrich_borrow(df_tx):
 
     df_sup  = query_table("supplies", select="id,code,name,group_name,image_url",
                           filters=[("id","in_",sup_ids)]) if sup_ids else pd.DataFrame()
-    df_borr = query_table("borrowers", select="id,name,type,phone,student_id,department",
+    df_borr = query_table("office_borrowers", select="id,name,type,phone,student_id,department",
                           filters=[("id","in_",borr_ids)]) if borr_ids else pd.DataFrame()
 
     merged = df_tx.merge(
@@ -537,7 +537,7 @@ def page_inventory():
             df_last = df_all_tx.drop_duplicates(subset=["supply_id"], keep="first")
             br_ids = df_last["borrower_id"].unique().tolist()
             if br_ids:
-                df_borr_all = query_table("borrowers", select="id,name",
+                df_borr_all = query_table("office_borrowers", select="id,name",
                                           filters=[("id","in_",br_ids)])
 
         for _, r in df.iterrows():
@@ -876,16 +876,16 @@ def page_request():
                         st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
                     else:
                         try:
-                            existing_borr = query_table("borrowers", select="id",
+                            existing_borr = query_table("office_borrowers", select="id",
                                                         filters=[("phone","eq",bor_phone.strip())])
                             if not existing_borr.empty:
                                 borr_id = int(existing_borr.iloc[0]["id"])
-                                update_rows("borrowers", {
+                                update_rows("office_borrowers", {
                                     "name": bor_name.strip(), "type": bor_type,
                                     "student_id": bor_sid or None, "department": bor_dept or None
                                 }, "id", borr_id)
                             else:
-                                borr = insert_row("borrowers", {
+                                borr = insert_row("office_borrowers", {
                                     "name": bor_name.strip(), "type": bor_type,
                                     "student_id": bor_sid or None, "department": bor_dept or None,
                                     "phone": bor_phone.strip()
@@ -1081,7 +1081,7 @@ def page_report():
             brr_ids = df_tx["borrower_id"].unique().tolist()
             df_s = query_table("supplies", select="id,code,name,group_name",
                                filters=[("id","in_",sup_ids)])
-            df_b = query_table("borrowers", select="id,name,type,student_id,department,phone",
+            df_b = query_table("office_borrowers", select="id,name,type,student_id,department,phone",
                                filters=[("id","in_",brr_ids)])
             merged = df_tx.merge(
                 df_s.rename(columns={"id":"sid","name":"sname","code":"scode","group_name":"sgroup"}),
@@ -1222,14 +1222,14 @@ def page_settings():
             sup  = query_table("supplies").to_dict(orient="records")
             btx  = query_table("borrow_transactions").to_dict(orient="records")
             ctx  = query_table("consume_transactions").to_dict(orient="records")
-            borr = query_table("borrowers").to_dict(orient="records")
+            borr = query_table("office_borrowers").to_dict(orient="records")
             backup = {
                 "backup_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "version": "office-v1.0",
                 "supplies": sup,
                 "borrow_transactions": btx,
                 "consume_transactions": ctx,
-                "borrowers": borr
+                "office_borrowers": borr
             }
             json_str = json.dumps(backup, ensure_ascii=False, indent=2, default=str)
             fname = f"office_backup_{date.today()}.json"
@@ -1304,12 +1304,12 @@ def page_settings():
                         elif "ล้างประวัติ" in clear_mode:
                             delete_rows("borrow_transactions", delete_all=True)
                             delete_rows("consume_transactions", delete_all=True)
-                            delete_rows("borrowers", delete_all=True)
+                            delete_rows("office_borrowers", delete_all=True)
                             st.success("✅ ล้างประวัติเรียบร้อย")
                         elif "ล้างทุกอย่าง" in clear_mode:
                             delete_rows("borrow_transactions", delete_all=True)
                             delete_rows("consume_transactions", delete_all=True)
-                            delete_rows("borrowers", delete_all=True)
+                            delete_rows("office_borrowers", delete_all=True)
                             delete_rows("supplies", delete_all=True)
                             st.success("✅ ล้างทุกอย่างเรียบร้อย")
                         load_sidebar_stats.clear()
