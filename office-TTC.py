@@ -607,14 +607,18 @@ def page_inventory():
 
         options = ["➕ เพิ่มใหม่"] + [f"{r['code']} — {r['name']}" for _, r in df_all.iterrows()]
 
-        # ถ้ากดปุ่ม ✏️ แก้ไข จาก card ให้ตั้งค่า selectbox ไปที่รายการนั้น
+        # ถ้ากดปุ่ม ✏️ แก้ไข จาก card ให้เซ็ต _next_sup_sel ก่อน
         if "_edit_supply_id" in st.session_state:
             _eid = st.session_state.pop("_edit_supply_id")
             _match = df_all[df_all["id"] == _eid]
             if not _match.empty:
                 _lbl = f"{_match.iloc[0]['code']} — {_match.iloc[0]['name']}"
                 if _lbl in options:
-                    st.session_state["sup_edit_sel"] = _lbl
+                    st.session_state["_next_sup_sel"] = _lbl
+
+        # pattern เดียวกับ Lab app — เซ็ต widget key ก่อน render
+        if "_next_sup_sel" in st.session_state:
+            st.session_state["sup_edit_sel"] = st.session_state.pop("_next_sup_sel")
 
         choice = st.selectbox("เลือกรายการ", options, key="sup_edit_sel")
 
@@ -693,7 +697,7 @@ def page_inventory():
                             payload["available_qty"] = sv_qty
                             insert_row("supplies", payload)
                             st.success(f"✅ เพิ่ม '{sv_code} — {sv_name}' เรียบร้อย")
-                            st.session_state["sup_edit_sel"] = "➕ เพิ่มใหม่"
+                            st.session_state["_next_sup_sel"] = "➕ เพิ่มใหม่"
                         else:
                             old_total = int(existing["total_qty"])
                             old_avail = int(existing["available_qty"])
@@ -706,7 +710,7 @@ def page_inventory():
                             update_rows("supplies", payload, "id", sup_id)
                             st.success(f"✅ แก้ไข '{sv_code} — {sv_name}' เรียบร้อย")
                             # คงอยู่ที่รายการเดิมหลังบันทึก
-                            st.session_state["sup_edit_sel"] = f"{sv_code} — {sv_name}"
+                            st.session_state["_next_sup_sel"] = f"{sv_code} — {sv_name}"
 
                         load_sidebar_stats.clear()
                         st.rerun()
