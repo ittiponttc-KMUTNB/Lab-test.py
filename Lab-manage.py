@@ -180,8 +180,8 @@ def batch_reset_equipment():
 # ═════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=30, show_spinner=False)
 def load_sidebar_stats():
-    """[FIX #3] Cache sidebar stats 30 วินาที"""
-    df_eq = query_table("equipment", select="id,available_qty")
+    """Cache sidebar stats 30 วินาที"""
+    df_eq = query_table("equipment", select="id,available_qty,is_consumable,min_qty")
     n_eq = len(df_eq)
     avail = int(df_eq["available_qty"].sum()) if not df_eq.empty else 0
 
@@ -189,9 +189,16 @@ def load_sidebar_stats():
     df_active = query_table("transactions", select="id,due_date",
                             filters=[("status", "eq", "ยืมอยู่")])
     n_borr = len(df_active)
-    # [FIX #6] คำนวณ overdue โดย filter due_date < today
     n_over = len(df_active[df_active["due_date"] < today_str]) if not df_active.empty else 0
-    return n_eq, avail, n_borr, n_over
+
+    # นับวัสดุสิ้นเปลืองใกล้หมด (available_qty <= min_qty)
+    n_low = 0
+    if not df_eq.empty:
+        df_cons = df_eq[df_eq["is_consumable"] == True]
+        if not df_cons.empty:
+            n_low = len(df_cons[df_cons["available_qty"] <= df_cons["min_qty"].fillna(0)])
+
+    return n_eq, avail, n_borr, n_over, n_low
 
 def load_active_transactions_enriched():
     """[FIX #1] ดึง transactions + equipment + borrowers ทีเดียว แล้ว merge"""
@@ -284,9 +291,9 @@ def load_report_data(date_from, date_to, status_filter):
     return report
 
 def load_equipment_summary():
-    """[FIX #1] สรุปอุปกรณ์ — นับ tx_count ด้วย batch"""
+    """สรุปอุปกรณ์ — นับ tx_count ด้วย batch"""
     df_eq = query_table("equipment",
-                        select="id,code,name,category,total_qty,available_qty,status",
+                        select="id,code,name,category,total_qty,available_qty,status,is_consumable,min_qty",
                         order=[("code", {"desc": False})])
     if df_eq.empty:
         return pd.DataFrame()
@@ -301,8 +308,9 @@ def load_equipment_summary():
     df_eq = df_eq.merge(tx_counts, left_on="id", right_on="equipment_id", how="left")
     df_eq["ครั้งที่เบิก"] = df_eq["ครั้งที่เบิก"].fillna(0).astype(int)
     df_eq["กำลังยืม"] = df_eq["total_qty"].astype(int) - df_eq["available_qty"].astype(int)
+    df_eq["ประเภท"] = df_eq["is_consumable"].apply(lambda x: "วัสดุสิ้นเปลือง" if x else "อุปกรณ์")
 
-    return df_eq[["code", "name", "category", "total_qty", "available_qty",
+    return df_eq[["code", "name", "category", "ประเภท", "total_qty", "available_qty",
                    "กำลังยืม", "status", "ครั้งที่เบิก"]].rename(columns={
         "code": "รหัส", "name": "ชื่ออุปกรณ์", "category": "หมวดหมู่",
         "total_qty": "ทั้งหมด", "available_qty": "พร้อมใช้", "status": "สถานะ"
@@ -396,11 +404,13 @@ def nav():
         admin_login_widget()
         st.markdown("---")
         try:
-            n_eq, avail, n_borr, n_over = load_sidebar_stats()
+            n_eq, avail, n_borr, n_over, n_low = load_sidebar_stats()
             st.metric("📦 อุปกรณ์", n_eq)
             st.metric("🔄 กำลังยืม", n_borr)
             if n_over > 0:
                 st.error(f"⚠️ เกินกำหนด {n_over} รายการ")
+            if n_low > 0:
+                st.warning(f"📦 วัสดุใกล้หมด {n_low} รายการ")
         except Exception:
             st.caption("⏳ กำลังโหลด...")
 
@@ -444,7 +454,7 @@ def page_dashboard():
 
     # Stats — ใช้ cached sidebar stats
     try:
-        n_eq, available, active_tx, overdue_count = load_sidebar_stats()
+        n_eq, available, active_tx, overdue_count, n_low = load_sidebar_stats()
     except Exception:
         st.error("❌ ไม่สามารถเชื่อมต่อ Supabase ได้ กรุณาตรวจสอบการตั้งค่า")
         return
@@ -474,6 +484,23 @@ def page_dashboard():
                 <b style="color:red;">เกิน {r['days_over']} วัน</b>
             </div>""", unsafe_allow_html=True)
 
+    # ── แจ้งเตือนวัสดุสิ้นเปลืองใกล้หมด ──────────────────────────────────
+    if n_low > 0:
+        st.warning(f"📦 วัสดุสิ้นเปลืองใกล้หมด {n_low} รายการ!")
+        df_low = query_table("equipment",
+                             select="code,name,available_qty,min_qty",
+                             filters=[("is_consumable","eq",True)])
+        if not df_low.empty:
+            df_low = df_low[df_low["available_qty"] <= df_low["min_qty"].fillna(0)]
+            for _, r in df_low.iterrows():
+                color = "#dc3545" if r["available_qty"] == 0 else "#ffc107"
+                st.markdown(
+                    f'<div class="eq-card" style="border-left:4px solid {color};">'
+                    f'📦 <b>{r["code"]}</b> — {r["name"]}<br>'
+                    f'คงเหลือ: <b style="color:{color};">{r["available_qty"]}</b>'
+                    f' / แจ้งเตือนเมื่อ ≤ {int(r["min_qty"])}</div>',
+                    unsafe_allow_html=True)
+
     st.markdown('<div class="section-header">📋 รายการที่กำลังยืมอยู่</div>', unsafe_allow_html=True)
     if df.empty:
         st.info("ไม่มีรายการยืมในขณะนี้ ✅")
@@ -499,7 +526,7 @@ def page_equipment():
     search = st.text_input("🔍 ค้นหา ชื่อ / รหัส / หมวดหมู่", placeholder="พิมพ์เพื่อค้นหา...")
 
     df_all_eq = query_table("equipment",
-                            select="id,code,name,category,total_qty,available_qty,status,image_url,description",
+                            select="id,code,name,category,total_qty,available_qty,status,image_url,description,is_consumable,min_qty",
                             order=[("code", {"desc": False})])
     cats = sorted(df_all_eq["category"].dropna().unique().tolist()) if not df_all_eq.empty else []
     cat_filter = st.selectbox("📂 หมวดหมู่", ["ทั้งหมด"] + cats)
@@ -537,7 +564,8 @@ def page_equipment():
                 st.markdown(
                     f"**หมวด:** {r['category'] or '-'}<br>"
                     f"**ทั้งหมด:** {r['total_qty']} | **พร้อมใช้:** {r['available_qty']}<br>"
-                    f"**สถานะ:** {badge(r['status'], STATUS_COLOR.get(r['status'],'#888'))}",
+                    f"**สถานะ:** {badge(r['status'], STATUS_COLOR.get(r['status'],'#888'))}"
+                    + (f" {badge('วัสดุสิ้นเปลือง', '#17a2b8')}" if r.get('is_consumable') else ""),
                     unsafe_allow_html=True)
                 if r.get("description"):
                     st.caption(r["description"])
@@ -620,6 +648,12 @@ def page_equipment():
                       if existing is not None else 0)
             sv_desc = st.text_area("รายละเอียด",
                 value=str(existing["description"] or "") if existing is not None else "")
+            sv_consumable = st.checkbox("📦 วัสดุสิ้นเปลือง (เบิกแล้วไม่ต้องคืน)",
+                value=bool(existing.get("is_consumable", False)) if existing is not None else False)
+            sv_min_qty = 0
+            if sv_consumable:
+                sv_min_qty = st.number_input("🔔 แจ้งเตือนเมื่อเหลือ ≤", min_value=0,
+                    value=int(existing.get("min_qty", 5) or 5) if existing is not None else 5)
             sv_img = st.file_uploader(f"📷 รูปอุปกรณ์ (สูงสุด {MAX_UPLOAD_MB} MB)",
                                        type=["jpg","jpeg","png","gif"])
 
@@ -653,7 +687,9 @@ def page_equipment():
                                 "category": sv_cat or None,
                                 "total_qty": sv_qty, "available_qty": sv_qty,
                                 "status": sv_stat, "image_url": img_url,
-                                "description": sv_desc or None
+                                "description": sv_desc or None,
+                                "is_consumable": sv_consumable,
+                                "min_qty": sv_min_qty if sv_consumable else None
                             })
                             st.success(f"✅ บันทึกการเพิ่มอุปกรณ์ '{sv_code} — {sv_name}' เรียบร้อยแล้ว")
                             st.session_state["_next_sel"] = "➕ เพิ่มใหม่"
@@ -671,7 +707,9 @@ def page_equipment():
                                 "category": sv_cat or None,
                                 "total_qty": sv_qty, "available_qty": new_available,
                                 "status": sv_stat, "image_url": img_url,
-                                "description": sv_desc or None
+                                "description": sv_desc or None,
+                                "is_consumable": sv_consumable,
+                                "min_qty": sv_min_qty if sv_consumable else None
                             }, "id", eq_id)
                             msg = f"✅ บันทึกการแก้ไข '{sv_code} — {sv_name}' เรียบร้อยแล้ว"
                             if diff > 0:
@@ -694,7 +732,7 @@ def page_borrow():
     st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">➕ เบิกอุปกรณ์</p>', unsafe_allow_html=True)
 
     avail = query_table("equipment",
-                        select="id,code,name,category,available_qty,image_url,description",
+                        select="id,code,name,category,available_qty,image_url,description,is_consumable",
                         filters=[("status","eq","พร้อมใช้")],
                         order=[("category",{"desc":False}),("code",{"desc":False})])
     avail = avail[avail["available_qty"] > 0] if not avail.empty else avail
@@ -737,8 +775,12 @@ def page_borrow():
         st.markdown(f"**{eq_row['code']}** — {eq_row['name']}")
         st.markdown(f"หมวด: {eq_row['category'] or '-'}")
         st.markdown(f"คงเหลือ: **{eq_row['available_qty']}**")
+        if eq_row.get("is_consumable"):
+            st.markdown(badge("วัสดุสิ้นเปลือง", "#17a2b8"), unsafe_allow_html=True)
         if eq_row.get("description"):
             st.caption(eq_row["description"])
+
+    is_consumable = bool(eq_row.get("is_consumable", False))
 
     qty = st.number_input("จำนวนที่ต้องการเบิก *", min_value=1,
                           max_value=int(eq_row["available_qty"]), value=1)
@@ -754,7 +796,11 @@ def page_borrow():
 
     st.markdown('<div class="section-header">📅 ขั้นตอนที่ 3 — วันที่</div>', unsafe_allow_html=True)
     borrow_date = st.date_input("วันที่เบิก *", value=date.today())
-    due_date = st.date_input("วันกำหนดคืน *", value=date.today())
+    if is_consumable:
+        st.info("📦 วัสดุสิ้นเปลือง — ไม่ต้องกำหนดวันคืน")
+        due_date = None
+    else:
+        due_date = st.date_input("วันกำหนดคืน *", value=date.today())
     condition_out = st.selectbox("สภาพอุปกรณ์ขณะเบิก", ["ปกติ", "มีรอยขีดข่วน", "ชำรุดบางส่วน"])
     note = st.text_area("หมายเหตุ (ถ้ามี)")
     st.divider()
@@ -764,7 +810,7 @@ def page_borrow():
             st.error("❌ กรุณากรอกชื่อผู้เบิก")
         elif not phone.strip():
             st.error("❌ กรุณากรอกเบอร์โทรศัพท์")
-        elif due_date < borrow_date:
+        elif not is_consumable and due_date and due_date < borrow_date:
             st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
         else:
             try:
@@ -773,7 +819,6 @@ def page_borrow():
                                             filters=[("phone", "eq", phone.strip())])
                 if not existing_borr.empty:
                     borr_id = int(existing_borr.iloc[0]["id"])
-                    # อัพเดทข้อมูลล่าสุด
                     update_rows("borrowers", {
                         "name": borrower_name.strip(), "type": borrower_type,
                         "student_id": student_id or None, "department": department or None
@@ -786,22 +831,32 @@ def page_borrow():
                     })
                     borr_id = borr["id"]
 
+                # วัสดุสิ้นเปลือง → สถานะ "เบิกแล้ว", ไม่มี due_date
+                tx_status = "เบิกแล้ว" if is_consumable else "ยืมอยู่"
                 insert_row("transactions", {
                     "equipment_id": eq_id, "borrower_id": borr_id,
                     "qty": qty, "borrow_date": str(borrow_date),
-                    "due_date": str(due_date), "condition_out": condition_out,
-                    "note": note or None, "status": "ยืมอยู่"
+                    "due_date": str(due_date) if due_date else None,
+                    "condition_out": condition_out,
+                    "note": note or None, "status": tx_status
                 })
                 new_avail = int(eq_row["available_qty"]) - qty
                 update_rows("equipment", {"available_qty": new_avail}, "id", eq_id)
                 load_sidebar_stats.clear()
 
-                st.success(
-                    f"✅ บันทึกสำเร็จ!\n\n"
-                    f"👤 **{borrower_name}**\n"
-                    f"📦 {eq_row['name']} จำนวน {qty}\n"
-                    f"📅 กำหนดคืน: {due_date}"
-                )
+                if is_consumable:
+                    st.success(
+                        f"✅ เบิกวัสดุสิ้นเปลืองสำเร็จ!\n\n"
+                        f"👤 **{borrower_name}**\n"
+                        f"📦 {eq_row['name']} จำนวน {qty}"
+                    )
+                else:
+                    st.success(
+                        f"✅ บันทึกสำเร็จ!\n\n"
+                        f"👤 **{borrower_name}**\n"
+                        f"📦 {eq_row['name']} จำนวน {qty}\n"
+                        f"📅 กำหนดคืน: {due_date}"
+                    )
                 st.balloons()
             except Exception as e:
                 st.error(f"❌ เกิดข้อผิดพลาด: {e}")
@@ -969,7 +1024,7 @@ def page_report():
     with tab1:
         date_from = st.date_input("ตั้งแต่", value=date(date.today().year, 1, 1))
         date_to = st.date_input("ถึงวันที่", value=date.today())
-        status_filter = st.selectbox("สถานะ", ["ทั้งหมด", "ยืมอยู่", "คืนแล้ว"])
+        status_filter = st.selectbox("สถานะ", ["ทั้งหมด", "ยืมอยู่", "คืนแล้ว", "เบิกแล้ว"])
 
         # [FIX #1] batch fetch + merge
         df_report = load_report_data(date_from, date_to, status_filter)
