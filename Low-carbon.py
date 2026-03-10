@@ -291,6 +291,20 @@ with tab_res:
     if teams_not_ready:
         st.warning(f"⏳ ยังรอข้อมูลครบ 3 ก้อน: {', '.join(teams_not_ready)}")
 
+    # ── ปุ่ม Reset — แสดงเสมอ ──
+    with st.expander("🗑️ Reset ข้อมูลทั้งหมด (ล้าง Session + Supabase)"):
+        st.warning("⚠️ การ Reset จะลบข้อมูลทุกทีมออกจากทั้ง Session และ Supabase ไม่สามารถกู้คืนได้")
+        if st.button("🗑️ ยืนยัน Reset ทั้งหมด", type="secondary", use_container_width=True):
+            st.session_state.teams_mix = {}
+            st.session_state.teams_strength = {}
+            st.session_state.team_list = []
+            st.session_state.current_spec = 1
+            reset_all()
+            st.toast("ล้างข้อมูลทั้งหมดแล้ว", icon="🗑️")
+            st.rerun()
+
+    st.divider()
+
     if not teams_ready:
         st.info("กรอกกำลังอัดครบ 3 ก้อนทุกทีมใน Tab 2 ก่อนครับ")
     else:
@@ -352,14 +366,7 @@ with tab_res:
                     st.balloons()
 
         with col_r2:
-            if st.button("⚠️ Reset ข้อมูลทั้งหมด", use_container_width=True):
-                st.session_state.teams_mix = {}
-                st.session_state.teams_strength = {}
-                st.session_state.team_list = []
-                st.session_state.current_spec = 1
-                reset_all()
-                st.toast("ล้างข้อมูลทั้งหมดแล้ว", icon="🗑️")
-                st.rerun()
+            pass
 
         # ── แก้ไขรายทีม ──
         st.divider()
