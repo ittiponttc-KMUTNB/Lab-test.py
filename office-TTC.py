@@ -565,11 +565,13 @@ def page_inventory():
                         f"**รหัส:** {r['code']}<br>"
                         f"**หน่วย:** {r.get('unit','ชิ้น')}<br>"
                         f"**คงเหลือ:** <b style='color:{status_color};'>{avail}</b> / {total}<br>"
-                        + (f"**ขั้นต่ำ:** {min_q} {'⚠️' if low_stock else ''}<br>" if min_q > 0 else "")
+
                         + f"**สถานะ:** {r.get('status','พร้อมใช้')}",
                         unsafe_allow_html=True)
                     if r.get("description"):
                         st.caption(r["description"])
+                    if low_stock:
+                        st.warning(f"⚠️ สต็อกใกล้หมด! คงเหลือ {avail} {r.get('unit','ชิ้น')} (ขั้นต่ำ {min_q})")
 
                 # ผู้ยืมล่าสุด (เฉพาะ borrow type)
                 if not is_consumable(gname) and not df_last.empty:
