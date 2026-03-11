@@ -975,19 +975,28 @@ def page_return():
                     cond_in  = st.selectbox("สภาพอุปกรณ์",
                                             ["ปกติ","มีรอยขีดข่วน","ชำรุด","สูญหาย"],
                                             key=f"ci_{r['id']}")
+                    ret_name = st.text_input("ชื่อผู้นำมาคืน *",
+                                             value=str(r.get("br_name","")) if pd.notna(r.get("br_name","")) else "",
+                                             key=f"rname_{r['id']}")
                     note_r = st.text_input("หมายเหตุ", key=f"rn_{r['id']}")
 
                     if st.button("📬 แจ้งคืน", key=f"notify_{r['id']}",
                                  type="primary", use_container_width=True):
-                        update_rows("borrow_transactions", {
-                            "return_date": str(ret_date),
-                            "condition_in": cond_in,
-                            "note": note_r or None,
-                            "status": "รอตรวจสอบ"
-                        }, "id", r["id"])
-                        st.success("📬 แจ้งคืนแล้ว! รอ Admin ตรวจสอบ")
-                        load_sidebar_stats.clear()
-                        st.rerun()
+                        borrow_dt = datetime.strptime(str(r["borrow_date"]), "%Y-%m-%d").date()
+                        if not ret_name.strip():
+                            st.error("❌ กรุณากรอกชื่อผู้นำมาคืน")
+                        elif ret_date < borrow_dt:
+                            st.error(f"❌ วันที่คืนต้องไม่ก่อนวันที่เบิก ({r['borrow_date']})")
+                        else:
+                            update_rows("borrow_transactions", {
+                                "return_date": str(ret_date),
+                                "condition_in": cond_in,
+                                "note": note_r or None,
+                                "status": "รอตรวจสอบ"
+                            }, "id", r["id"])
+                            st.success("📬 แจ้งคืนแล้ว! รอ Admin ตรวจสอบ")
+                            load_sidebar_stats.clear()
+                            st.rerun()
 
     with tab2:
         if df_pending.empty:
@@ -1105,10 +1114,11 @@ def page_report():
                 "รหัส/ID": merged["bsid"], "ภาควิชา": merged["bdept"],
                 "โทรศัพท์": merged["bphone"], "จำนวน": merged["qty"],
                 "วันเบิก": merged["borrow_date"], "กำหนดคืน": merged["due_date"],
-                "วันคืน": merged.get("return_date", None),
-                "สภาพเบิก": merged.get("condition_out", None),
-                "สภาพคืน": merged.get("condition_in", None),
-                "สถานะ": merged["status"], "หมายเหตุ": merged.get("note", None)
+                "วันคืน": merged["return_date"] if "return_date" in merged.columns else None,
+                "สภาพเบิก": merged["condition_out"] if "condition_out" in merged.columns else None,
+                "สภาพคืน": merged["condition_in"] if "condition_in" in merged.columns else None,
+                "สถานะ": merged["status"],
+                "หมายเหตุ": merged["note"] if "note" in merged.columns else None
             })
         else:
             df_show = pd.DataFrame()
@@ -1147,7 +1157,8 @@ def page_report():
                 "ผู้เบิก": merged2["requester_name"], "ประเภท": merged2["requester_type"],
                 "ภาควิชา": merged2["department"],
                 "จำนวน": merged2["qty"], "วันเบิก": merged2["request_date"],
-                "วัตถุประสงค์": merged2.get("purpose", None), "สถานะ": merged2["status"]
+                "วัตถุประสงค์": merged2["purpose"] if "purpose" in merged2.columns else None,
+                "สถานะ": merged2["status"]
             })
         else:
             df_show2 = pd.DataFrame()
