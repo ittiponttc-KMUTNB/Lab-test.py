@@ -233,13 +233,22 @@ def load_sidebar_stats():
 def _enrich_borrow(df_tx):
     if df_tx.empty:
         return df_tx
-    sup_ids = df_tx["supply_id"].unique().tolist()
+    # cast เป็น int ป้องกัน float key ทำให้ merge ไม่ match
+    df_tx = df_tx.copy()
+    df_tx["supply_id"]   = df_tx["supply_id"].astype(int)
+    df_tx["borrower_id"] = df_tx["borrower_id"].astype(int)
+    sup_ids  = df_tx["supply_id"].unique().tolist()
     borr_ids = df_tx["borrower_id"].unique().tolist()
 
     df_sup  = query_table("supplies", select="id,code,name,group_name,image_url",
                           filters=[("id","in_",sup_ids)]) if sup_ids else pd.DataFrame()
     df_borr = query_table("office_borrowers", select="id,name,type,phone,student_id,department",
                           filters=[("id","in_",borr_ids)]) if borr_ids else pd.DataFrame()
+
+    if not df_sup.empty:
+        df_sup["id"] = df_sup["id"].astype(int)
+    if not df_borr.empty:
+        df_borr["id"] = df_borr["id"].astype(int)
 
     merged = df_tx.merge(
         df_sup.rename(columns={"id":"sup_id","name":"sup_name","code":"sup_code",
@@ -1093,12 +1102,20 @@ def page_report():
 
         df_tx = query_table("borrow_transactions", filters=filters_r, order=[("id",{"desc":True})])
         if not df_tx.empty:
+            # cast เป็น int ป้องกัน float key ทำให้ merge ไม่ match
+            df_tx["supply_id"]   = df_tx["supply_id"].astype(int)
+            df_tx["borrower_id"] = df_tx["borrower_id"].astype(int)
             sup_ids = df_tx["supply_id"].unique().tolist()
             brr_ids = df_tx["borrower_id"].unique().tolist()
             df_s = query_table("supplies", select="id,code,name,group_name",
                                filters=[("id","in_",sup_ids)])
             df_b = query_table("office_borrowers", select="id,name,type,student_id,department,phone",
                                filters=[("id","in_",brr_ids)])
+            # cast id ใน lookup tables ด้วย
+            if not df_s.empty:
+                df_s["id"] = df_s["id"].astype(int)
+            if not df_b.empty:
+                df_b["id"] = df_b["id"].astype(int)
             merged = df_tx.merge(
                 df_s.rename(columns={"id":"sid","name":"sname","code":"scode","group_name":"sgroup"}),
                 left_on="supply_id", right_on="sid", how="left"
