@@ -906,7 +906,7 @@ def page_request():
                                     "student_id": bor_sid or None, "department": bor_dept or None,
                                     "phone": bor_phone.strip()
                                 })
-                                borr_id = borr["id"]
+                                borr_id = int(borr["id"])
 
                             insert_row("borrow_transactions", {
                                 "supply_id": int(opts_b[sel_b]),
@@ -941,7 +941,11 @@ def page_return():
 
     df_pending = load_pending_borrows()
     n_pending = len(df_pending)
-    tab1, tab2 = st.tabs(["📬 แจ้งคืน", f"🔍 รอตรวจสอบ ({n_pending})"])
+    # นับรายการที่ยกเลิกได้ (ยืมอยู่ + รอตรวจสอบ)
+    df_cancel_list = query_table("borrow_transactions", select="id",
+                                 filters=[("status","in_",["ยืมอยู่","รอตรวจสอบ"])])
+    n_cancel = len(df_cancel_list)
+    tab1, tab2, tab3 = st.tabs(["📬 แจ้งคืน", f"🔍 รอตรวจสอบ ({n_pending})", f"🚫 ยกเลิกรายการ ({n_cancel})"])
 
     with tab1:
         st.markdown(
@@ -1081,6 +1085,117 @@ def page_return():
                     else:
                         st.info("🔒 Login Admin เพื่อยืนยันรับคืน")
 
+    # ── TAB 3: ยกเลิกรายการ (Admin เท่านั้น) ──────────────────────────────────
+    with tab3:
+        if not is_admin():
+            st.warning("🔒 ฟีเจอร์นี้สำหรับ Admin เท่านั้น กรุณา Login ที่ Sidebar")
+        else:
+            st.markdown(
+                '<div class="info-box">🚫 <b>ยกเลิกรายการ</b> — ข้อมูลไม่ถูกลบ '
+                'แต่เปลี่ยนสถานะเป็น "ยกเลิก" พร้อมบันทึกเหตุผล ตรวจสอบย้อนหลังได้เสมอ</div>',
+                unsafe_allow_html=True)
+
+            # ดึงรายการที่ยกเลิกได้
+            df_active_all = load_active_borrows()
+            df_pending_all = load_pending_borrows()
+            df_cancelable = pd.concat([df_active_all, df_pending_all], ignore_index=True)                             if not df_active_all.empty or not df_pending_all.empty else pd.DataFrame()
+
+            if df_cancelable.empty:
+                st.info("✅ ไม่มีรายการที่สามารถยกเลิกได้")
+            else:
+                st.caption(f"พบ {len(df_cancelable)} รายการที่ยกเลิกได้")
+                for _, r in df_cancelable.iterrows():
+                    od = overdue_days(r["due_date"])
+                    status_color = "#D62828" if r["status"] == "รอตรวจสอบ" else "#52796F"
+                    lbl = f"TX#{r['id']} | {r['sup_code']} {r['sup_name']} | {r['br_name']} | [{r['status']}]"
+
+                    with st.expander(lbl):
+                        c1, c2 = st.columns([1, 2])
+                        with c1:
+                            show_image(r.get("sup_img"), size="preview")
+                        with c2:
+                            st.markdown(
+                                f"📦 **{r['sup_code']}** — {r['sup_name']} ({r['qty']} ชิ้น)<br>"
+                                f"👤 {r['br_name']} ({r['br_type']})"
+                                + (f" | 📞 {r['br_phone']}" if pd.notna(r.get('br_phone')) and r.get('br_phone') else "") + "<br>"
+                                f"📅 เบิก {r['borrow_date']} | กำหนดคืน <b>{r['due_date']}</b><br>"
+                                f"สถานะ: <b style='color:{status_color};'>{r['status']}</b>"
+                                + (f"<br><b style='color:#D62828;'>⚠️ เกิน {od} วัน</b>" if od > 0 else ""),
+                                unsafe_allow_html=True)
+
+                        st.markdown("---")
+                        cancel_reason = st.text_input(
+                            "📝 เหตุผลที่ยกเลิก *",
+                            placeholder="เช่น บันทึกผิด, ทดสอบระบบ, ผู้ยืมยกเลิก",
+                            key=f"cancel_reason_{r['id']}")
+
+                        if st.button("🚫 ยืนยันยกเลิกรายการนี้", key=f"cancel_{r['id']}",
+                                     type="primary", use_container_width=True):
+                            if not cancel_reason.strip():
+                                st.error("❌ กรุณากรอกเหตุผลที่ยกเลิก")
+                            else:
+                                try:
+                                    # บันทึกสถานะยกเลิก + เหตุผล + วันที่
+                                    note_cancel = f"[ยกเลิกโดย Admin | {date.today()} | เหตุผล: {cancel_reason.strip()}]"
+                                    update_rows("borrow_transactions", {
+                                        "status": "ยกเลิก",
+                                        "note": note_cancel
+                                    }, "id", r["id"])
+                                    # คืน available_qty กลับให้อุปกรณ์
+                                    cur_eq = query_table("supplies", select="available_qty,total_qty",
+                                                         filters=[("id","eq",r["supply_id"])])
+                                    if not cur_eq.empty:
+                                        cur_a = int(cur_eq.iloc[0]["available_qty"])
+                                        cur_t = int(cur_eq.iloc[0]["total_qty"])
+                                        new_a = min(cur_a + int(r["qty"]), cur_t)
+                                        new_stat = "พร้อมใช้" if new_a > 0 else "หมด"
+                                        update_rows("supplies", {
+                                            "available_qty": new_a,
+                                            "status": new_stat
+                                        }, "id", r["supply_id"])
+                                    load_sidebar_stats.clear()
+                                    st.success(f"🚫 ยกเลิก TX#{r['id']} เรียบร้อยแล้ว | เหตุผล: {cancel_reason.strip()}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
+            # แสดงประวัติที่ยกเลิกแล้ว
+            st.markdown('<div class="section-header">📋 ประวัติรายการที่ยกเลิกแล้ว</div>', unsafe_allow_html=True)
+            df_cancelled = query_table("borrow_transactions",
+                                       select="id,supply_id,borrower_id,qty,borrow_date,due_date,note,status",
+                                       filters=[("status","eq","ยกเลิก")],
+                                       order=[("id",{"desc":True})])
+            if df_cancelled.empty:
+                st.info("ยังไม่มีรายการที่ยกเลิก")
+            else:
+                df_cancelled = df_cancelled.copy()
+                df_cancelled["supply_id"]   = df_cancelled["supply_id"].astype(int)
+                df_cancelled["borrower_id"] = df_cancelled["borrower_id"].astype(int)
+                sup_ids_c = df_cancelled["supply_id"].unique().tolist()
+                brr_ids_c = df_cancelled["borrower_id"].unique().tolist()
+                df_sc = query_table("supplies", select="id,code,name",
+                                    filters=[("id","in_",sup_ids_c)])
+                df_bc = query_table("office_borrowers", select="id,name",
+                                    filters=[("id","in_",brr_ids_c)])
+                if not df_sc.empty:
+                    df_sc["id"] = df_sc["id"].astype(int)
+                if not df_bc.empty:
+                    df_bc["id"] = df_bc["id"].astype(int)
+                merged_c = df_cancelled.merge(
+                    df_sc.rename(columns={"id":"sid","name":"sname","code":"scode"}),
+                    left_on="supply_id", right_on="sid", how="left"
+                ).merge(
+                    df_bc.rename(columns={"id":"bid","name":"bname"}),
+                    left_on="borrower_id", right_on="bid", how="left"
+                )
+                for _, r in merged_c.iterrows():
+                    st.markdown(
+                        f'<div class="item-card" style="border-left:4px solid #aaa;opacity:0.75;">'
+                        f'🚫 <b>TX#{r["id"]}</b> | {r.get("scode","-")} — {r.get("sname","-")} ({r["qty"]} ชิ้น)<br>'
+                        f'👤 {r.get("bname","-")} | 📅 เบิก {r["borrow_date"]}<br>'
+                        f'<span style="font-size:0.82rem;color:#888;">{r.get("note","")}</span>'
+                        f'</div>', unsafe_allow_html=True)
+
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: REPORT
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1094,7 +1209,7 @@ def page_report():
         col_d1, col_d2 = st.columns(2)
         date_from = col_d1.date_input("ตั้งแต่", value=date(date.today().year, 1, 1), key="rp_from")
         date_to   = col_d2.date_input("ถึง", value=date.today(), key="rp_to")
-        status_f  = st.selectbox("สถานะ", ["ทั้งหมด","ยืมอยู่","คืนแล้ว","รอตรวจสอบ"], key="rp_stat")
+        status_f  = st.selectbox("สถานะ", ["ทั้งหมด","ยืมอยู่","คืนแล้ว","รอตรวจสอบ","ยกเลิก"], key="rp_stat")
 
         filters_r = [("borrow_date","gte",str(date_from)),("borrow_date","lte",str(date_to))]
         if status_f != "ทั้งหมด":
