@@ -1440,6 +1440,17 @@ def page_settings():
         ])
 
         if clear_mode != "เลือก...":
+            # ตรวจสอบรายการ "ยืมอยู่" ก่อนแสดงฟอร์ม
+            df_active_chk = query_table("borrow_transactions", select="id",
+                                        filters=[("status","eq","ยืมอยู่")])
+            n_active_chk = len(df_active_chk)
+
+            if "ล้างประวัติ" in clear_mode or "ล้างทุกอย่าง" in clear_mode:
+                if n_active_chk > 0:
+                    st.error(f"❌ ไม่สามารถล้างได้ ยังมีอุปกรณ์ที่ยืมอยู่ {n_active_chk} รายการ")
+                    st.warning("⚠️ กรุณารับคืนหรือยกเลิกรายการที่ยืมอยู่ทั้งหมดก่อน แล้วค่อยล้างข้อมูล")
+                    st.stop()
+
             st.markdown("**พิมพ์ CONFIRM เพื่อยืนยัน:**")
             confirm = st.text_input("", placeholder="CONFIRM", key="confirm_clear")
             if st.button("🗑️ ดำเนินการ", type="primary", use_container_width=True):
@@ -1456,10 +1467,16 @@ def page_settings():
                                     }, "id", int(r["id"]))
                             st.success("✅ รีเซ็ตเรียบร้อย")
                         elif "ล้างประวัติ" in clear_mode:
+                            # reset available_qty ก่อนล้าง
+                            df_s = query_table("supplies", select="id,total_qty")
+                            for _, r in df_s.iterrows():
+                                update_rows("supplies", {
+                                    "available_qty": int(r["total_qty"]), "status": "พร้อมใช้"
+                                }, "id", int(r["id"]))
                             delete_rows("borrow_transactions", delete_all=True)
                             delete_rows("consume_transactions", delete_all=True)
                             delete_rows("office_borrowers", delete_all=True)
-                            st.success("✅ ล้างประวัติเรียบร้อย")
+                            st.success("✅ ล้างประวัติเรียบร้อย และรีเซ็ตจำนวนอุปกรณ์แล้ว")
                         elif "ล้างทุกอย่าง" in clear_mode:
                             delete_rows("borrow_transactions", delete_all=True)
                             delete_rows("consume_transactions", delete_all=True)
