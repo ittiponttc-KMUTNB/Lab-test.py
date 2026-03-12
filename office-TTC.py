@@ -799,6 +799,8 @@ def page_request():
                 if st.button("✅ ยืนยันการเบิก", type="primary", use_container_width=True, key="con_submit"):
                     if not req_name.strip():
                         st.error("❌ กรุณากรอกชื่อผู้เบิก")
+                    elif req_date > date.today():
+                        st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า กรุณาใช้วันที่ปัจจุบันหรือก่อนหน้า")
                     else:
                         try:
                             insert_row("consume_transactions", {
@@ -888,6 +890,8 @@ def page_request():
                         st.error("❌ กรุณากรอกชื่อ")
                     elif not bor_phone.strip():
                         st.error("❌ กรุณากรอกเบอร์โทรศัพท์")
+                    elif borrow_date > date.today():
+                        st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า กรุณาใช้วันที่ปัจจุบันหรือก่อนหน้า")
                     elif due_date < borrow_date:
                         st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
                     else:
