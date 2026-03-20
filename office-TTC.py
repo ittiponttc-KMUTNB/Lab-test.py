@@ -1005,10 +1005,18 @@ def page_return():
                         elif ret_date < borrow_dt:
                             st.error(f"❌ วันที่คืนต้องไม่ก่อนวันที่เบิก ({r['borrow_date']})")
                         else:
+                            # รวม note ผู้ยืม (เดิม) + note ผู้คืน (ใหม่) ไม่ลบของเดิม
+                            existing_note = str(r.get("note", "") or "").strip()
+                            new_note_r = note_r.strip() if note_r and note_r.strip() else ""
+                            if new_note_r:
+                                returner_tag = f"[ผู้คืน: {new_note_r}]"
+                                combined_note = f"{existing_note} {returner_tag}".strip() if existing_note else returner_tag
+                            else:
+                                combined_note = existing_note if existing_note else None
                             update_rows("borrow_transactions", {
                                 "return_date": str(ret_date),
                                 "condition_in": cond_in,
-                                "note": note_r or None,
+                                "note": combined_note,
                                 "status": "รอตรวจสอบ"
                             }, "id", r["id"])
                             st.success("📬 แจ้งคืนแล้ว! รอ Admin ตรวจสอบ")
@@ -1051,7 +1059,13 @@ def page_return():
                         with cc1:
                             if st.button("✅ ยืนยันรับคืน", key=f"ok_{r['id']}",
                                          type="primary", use_container_width=True):
-                                note_f = f"[Admin: {admin_note}]" if admin_note else r.get("note")
+                                # รวม note สะสม: note เดิม (ผู้ยืม+ผู้คืน) + note Admin ใหม่
+                                existing_note = str(r.get("note", "") or "").strip()
+                                if admin_note and admin_note.strip():
+                                    admin_tag = f"[Admin: {admin_note.strip()}]"
+                                    note_f = f"{existing_note} {admin_tag}".strip() if existing_note else admin_tag
+                                else:
+                                    note_f = existing_note if existing_note else None
                                 update_rows("borrow_transactions", {
                                     "condition_in": admin_cond,
                                     "note": note_f,
