@@ -104,6 +104,28 @@ div.stButton > button {
 input, textarea { font-size: 16px !important; }
 div[data-baseweb="select"] { font-size: 16px; }
 
+/* ── Input / Dropdown — พื้นขาว ขอบชัด ── */
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div,
+div[data-baseweb="textarea"] > div,
+input[type="text"], input[type="number"], input[type="password"],
+textarea {
+    background-color: white !important;
+    border: 1.5px solid #b7d5c7 !important;
+    border-radius: 8px !important;
+}
+div[data-baseweb="select"] > div:hover,
+div[data-baseweb="input"] > div:hover {
+    border-color: #2D6A4F !important;
+}
+/* dropdown list popup */
+div[data-baseweb="popover"] ul {
+    background: white !important;
+}
+div[data-baseweb="popover"] li:hover {
+    background: #eaf2ee !important;
+}
+
 /* ── Metric cards ── */
 div[data-testid="metric-container"] {
     background: white; border-radius: 12px;
