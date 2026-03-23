@@ -190,6 +190,27 @@ div[data-testid="metric-container"] {
 /* ── Content padding เพื่อไม่ให้ bottom nav บัง ── */
 .main-content-pad { padding-bottom: 80px; }
 
+/* ── ซ่อนปุ่ม Streamlit จริงใต้ bottom nav ── */
+div[data-testid="stBottom"],
+div[data-testid="stBottom"] ~ div { display: none !important; }
+
+/* ── ซ่อนปุ่ม nav จริงใน sidebar ── */
+section[data-testid="stSidebar"] div[style*="display:none"] { display: none !important; }
+section[data-testid="stSidebar"] div[style*="display:none"] ~ div.stButton { display: none !important; }
+
+/* ── ซ่อน expander border-left ที่เป็นเส้นแดง ── */
+div[data-testid="stExpander"],
+div[data-testid="stExpander"] > details,
+div[data-testid="stExpander"] details summary,
+details[data-testid="stExpanderDetails"] {
+    border-left: none !important;
+    outline: none !important;
+}
+div[data-testid="stExpander"] > details {
+    border: 1px solid #e0e8e4 !important;
+    border-radius: 8px !important;
+}
+
 /* ── Section header ── */
 .section-header {
     font-size: 1rem; font-weight: 700; color: #1b4332;
@@ -604,29 +625,19 @@ def render_bottom_nav():
             f'<span class="bnav-icon">{icon}</span>{label}</a>'
         )
 
-    # CSS ซ่อนปุ่ม Streamlit ทั้งหมดใน bottom nav wrapper
-    st.markdown("""
-    <style>
-    div[data-testid="stHorizontalBlock"]:has(button[key^="bnav_"]) {
-        display: none !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.markdown(
         f'<div class="bottom-nav">{links_html}</div>',
         unsafe_allow_html=True
     )
 
-    # ปุ่มจริง Streamlit — ซ่อนด้วย CSS ข้างบน แต่ยังทำงานได้
-    cols = st.columns(len(nav_items))
-    for i, (pname, icon, label) in enumerate(nav_items):
-        with cols[i]:
-            if st.button(f"{icon} {label}", key=f"bnav_{pname}",
-                         use_container_width=True,
-                         type="primary" if page == pname else "secondary"):
+    # ปุ่มจริง Streamlit — ซ่อนใน sidebar ไม่โผล่ใน main content
+    with st.sidebar:
+        st.markdown('<div style="display:none;">', unsafe_allow_html=True)
+        for pname, icon, label in nav_items:
+            if st.button(f"{icon} {label}", key=f"bnav_{pname}"):
                 st.session_state.page = pname
                 st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def nav():
@@ -1871,6 +1882,9 @@ def page_return():
         if df_pending.empty:
             st.info("✅ ไม่มีรายการรอตรวจสอบ")
         else:
+            # sort ใหม่หลัง enrich (merge อาจทำให้ลำดับเปลี่ยน)
+            if "id" in df_pending.columns:
+                df_pending = df_pending.sort_values("id", ascending=False)
             st.warning(f"🔍 {len(df_pending)} รายการรอ Admin ตรวจสอบ")
             for _, r in df_pending.iterrows():
                 od = overdue_days(r["due_date"])
