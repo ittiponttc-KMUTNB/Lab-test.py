@@ -86,7 +86,10 @@ st.markdown("""
 html, body, [class*="css"] {
     font-family: 'Sarabun', sans-serif;
     font-size: 16px;
-    background-color: #f0f4f1;
+    background-color: #ffffff;
+}
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    background-color: #ffffff !important;
 }
 
 /* ── ซ่อน sidebar toggle บน mobile ── */
