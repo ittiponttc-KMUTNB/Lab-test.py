@@ -804,12 +804,13 @@ def page_dashboard():
         for _, r in df_active.iterrows():
             od = overdue_days(r["due_date"])
             bc = "#D62828" if od > 0 else "#2D6A4F"
+            phone_str = f' | 📞 {r["br_phone"]}' if pd.notna(r.get("br_phone")) and r.get("br_phone") else ""
             st.markdown(
                 f'<div class="item-card" style="border-left:4px solid {bc};">'
                 f'{group_badge(r.get("sup_group",""))}'
                 f' <b>{r["sup_code"]}</b> — {r["sup_name"]} '
                 f'<span class="qty-badge" style="background:#e0eeea;color:#1b4332;">{r["qty"]} ชิ้น</span><br>'
-                f'👤 {r["br_name"]} ({r["br_type"]})<br>'
+                f'👤 {r["br_name"]} ({r["br_type"]}){phone_str}<br>'
                 f'📅 เบิก {r["borrow_date"]} | กำหนดคืน <b>{r["due_date"]}</b>'
                 + (f' &nbsp;<b style="color:#D62828;">⚠️ เกิน {od} วัน</b>' if od > 0 else "")
                 + '</div>', unsafe_allow_html=True)
@@ -1068,14 +1069,18 @@ DUPLICATE_GUARD_SECONDS = 10
 
 def _make_submit_key(supply_id, name):
     """สร้าง key จาก supply_id + ชื่อผู้เบิก"""
-    return f"{supply_id}|{name.strip().lower()}"
+    return f"{supply_id}|{str(name).strip().lower()}"
 
 def check_duplicate_submit(supply_id, name):
     """
     คืนค่า:
       "ok"        — ไม่ซ้ำ ผ่านได้เลย
       "duplicate" — กดซ้ำภายใน DUPLICATE_GUARD_SECONDS วินาที
+      "submitting" — กำลัง submit อยู่ (ป้องกัน double click)
     """
+    # ป้องกัน double-click: ถ้า flag is_submitting ยังอยู่
+    if st.session_state.get("is_submitting"):
+        return "submitting"
     key = _make_submit_key(supply_id, name)
     last = st.session_state.get("last_submit_guard")
     if last and last["key"] == key:
@@ -1085,15 +1090,21 @@ def check_duplicate_submit(supply_id, name):
     return "ok"
 
 def register_submit(supply_id, name):
-    """บันทึก timestamp ทันที (เรียกก่อน insert เพื่อล็อก)"""
+    """ล็อกทันที — เรียกก่อน insert เสมอ"""
+    st.session_state["is_submitting"] = True
     st.session_state["last_submit_guard"] = {
         "key": _make_submit_key(supply_id, name),
         "ts": time.time()
     }
 
+def finish_submit():
+    """เรียกหลัง insert สำเร็จ — ปลดล็อก"""
+    st.session_state.pop("is_submitting", None)
+
 def clear_submit_guard():
-    """ล้าง guard (เมื่อผู้ใช้ยืนยัน ยืม 2 รอบ)"""
+    """ล้าง guard ทั้งหมด (เมื่อผู้ใช้ยืนยัน ยืม 2 รอบ)"""
     st.session_state.pop("last_submit_guard", None)
+    st.session_state.pop("is_submitting", None)
 
 
 
@@ -1341,6 +1352,8 @@ def page_request():
                                 st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า")
                             elif sel_id is None:
                                 st.error("❌ กรุณาเลือกอุปกรณ์ใหม่")
+                            elif check_duplicate_submit(sel_id, req_name) == "submitting":
+                                st.warning("⏳ กำลังบันทึก กรุณารอสักครู่...")
                             elif check_duplicate_submit(sel_id, req_name) == "duplicate":
                                 st.session_state["con_pending_confirm"] = True
                             else:
@@ -1363,6 +1376,7 @@ def page_request():
                                     if new_avail <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
                                     load_sidebar_stats.clear()
+                                    finish_submit()
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
@@ -1412,6 +1426,7 @@ def page_request():
                                     if new_avail2 <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
                                     load_sidebar_stats.clear()
+                                    finish_submit()
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
@@ -1542,6 +1557,8 @@ def page_request():
                                 st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
                             elif sel_id_b is None:
                                 st.error("❌ กรุณาเลือกอุปกรณ์ใหม่")
+                            elif check_duplicate_submit(sel_id_b, bor_name) == "submitting":
+                                st.warning("⏳ กำลังบันทึก กรุณารอสักครู่...")
                             elif check_duplicate_submit(sel_id_b, bor_name) == "duplicate":
                                 st.session_state["bor_pending_confirm"] = True
                             else:
@@ -1580,6 +1597,7 @@ def page_request():
                                     if new_avail_b <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
                                     load_sidebar_stats.clear()
+                                    finish_submit()
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
@@ -1634,6 +1652,7 @@ def page_request():
                                     if new_avail_b2 <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
                                     load_sidebar_stats.clear()
+                                    finish_submit()
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
