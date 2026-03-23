@@ -291,10 +291,10 @@ div[data-testid="stTabs"] button[role="tab"]:hover {
     color: #1b4332 !important;
 }
 div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-    background: #1b4332 !important;
+    background: #2D6A4F !important;
     color: white !important;
-    border-color: #1b4332 !important;
-    box-shadow: 0 2px 8px rgba(27,67,50,0.30) !important;
+    border-color: #2D6A4F !important;
+    box-shadow: 0 2px 8px rgba(45,106,79,0.30) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1222,8 +1222,8 @@ def page_request():
         background: #eaf2ee !important; border-color: #2D6A4F !important; color: #1b4332 !important;
     }
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-        background: #1b4332 !important; color: white !important;
-        border-color: #1b4332 !important; box-shadow: 0 2px 8px rgba(27,67,50,0.30) !important;
+        background: #2D6A4F !important; color: white !important;
+        border-color: #2D6A4F !important; box-shadow: 0 2px 8px rgba(45,106,79,0.30) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1440,8 +1440,10 @@ def page_request():
         render_step_bar(st.session_state.bor_step, ["เลือกอุปกรณ์", "ข้อมูลผู้ยืม", "ยืนยัน"])
 
         st.markdown(
-            '<div class="info-box">🔌 อุปกรณ์ <b>เบิก-คืน</b> — '
-            'ต้องนำมาคืนหลังใช้งาน Admin จะตรวจสอบสภาพ</div>',
+            '<div style="background:#eaf4fb;border:1.5px solid #aed6f1;border-left:5px solid #2980b9;'
+            'border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.9rem;color:#1a5276;">'
+            '🔌 อุปกรณ์ <b>เบิก-คืน</b> — '
+            '<b style="color:#C0392B;">ต้องนำมาคืน</b>หลังใช้งาน Admin จะตรวจสอบสภาพ</div>',
             unsafe_allow_html=True)
 
         df_bor_sup = query_table("supplies",
