@@ -260,13 +260,13 @@ div[data-testid="stTabs"] button[role="tab"] {
     transition: all 0.15s ease !important;
 }
 div[data-testid="stTabs"] button[role="tab"]:hover {
-    background: #d4eadd !important;
+    background: white !important;
     color: #1b4332 !important;
 }
 div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-    background: #1b4332 !important;
+    background: #C0392B !important;
     color: white !important;
-    box-shadow: 0 2px 8px rgba(27,67,50,0.25) !important;
+    box-shadow: 0 2px 8px rgba(192,57,43,0.30) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -489,9 +489,9 @@ def render_header():
     logo_html = ""
     if LOGO_URL:
         logo_opt = optimized_url(LOGO_URL, 100, 100, "fit") if "cloudinary" in LOGO_URL else LOGO_URL
-        logo_html = f'<img src="{logo_opt}" style="width:44px;height:auto;border-radius:8px;" loading="lazy">'
+        logo_html = f'<img src="{logo_opt}" style="width:72px;height:auto;border-radius:10px;" loading="lazy">'
     else:
-        logo_html = '<span style="font-size:2rem;">🏢</span>'
+        logo_html = '<span style="font-size:3rem;">🏢</span>'
 
     role_badge = (
         '<span class="role-badge role-admin">🔑 Admin Mode</span>'
@@ -501,7 +501,7 @@ def render_header():
 
     st.markdown(
         f'<div class="app-header">'
-        f'<div class="app-header-logo">{logo_html}</div>'
+        f'<div class="app-header-logo" style="min-width:80px;">{logo_html}</div>'
         f'<div class="app-header-text">'
         f'<h2>ระบบเบิกอุปกรณ์สำนักงาน</h2>'
         f'<p>ภาควิชาครุศาสตร์โยธา — มจพ.</p>'
@@ -1068,14 +1068,14 @@ def page_request():
     }
     /* Tab hover */
     div[data-testid="stTabs"] button[role="tab"]:hover {
-        background: #d4eadd !important;
+        background: white !important;
         color: #1b4332 !important;
     }
     /* Tab active */
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-        background: #1b4332 !important;
+        background: #C0392B !important;
         color: white !important;
-        box-shadow: 0 2px 8px rgba(27,67,50,0.25) !important;
+        box-shadow: 0 2px 8px rgba(192,57,43,0.30) !important;
     }
     /* ซ่อน underline เดิมของ Streamlit */
     div[data-testid="stTabs"] button[role="tab"] div[data-testid="stMarkdownContainer"] p {
