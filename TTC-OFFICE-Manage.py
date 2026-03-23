@@ -1085,7 +1085,7 @@ def check_duplicate_submit(supply_id, name):
     return "ok"
 
 def register_submit(supply_id, name):
-    """บันทึก timestamp หลัง submit สำเร็จ"""
+    """บันทึก timestamp ทันที (เรียกก่อน insert เพื่อล็อก)"""
     st.session_state["last_submit_guard"] = {
         "key": _make_submit_key(supply_id, name),
         "ts": time.time()
@@ -1347,6 +1347,7 @@ def page_request():
                                 st.session_state.pop("con_pending_confirm", None)
                                 eq_final = df_con_sup[df_con_sup["id"] == sel_id].iloc[0]
                                 try:
+                                    register_submit(sel_id, req_name)   # ล็อกก่อน insert
                                     insert_row("consume_transactions", {
                                         "supply_id": sel_id,
                                         "requester_name": req_name.strip(),
@@ -1362,7 +1363,6 @@ def page_request():
                                     if new_avail <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
                                     load_sidebar_stats.clear()
-                                    register_submit(sel_id, req_name)
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
@@ -1396,6 +1396,7 @@ def page_request():
                                 st.session_state.pop("con_pending_confirm", None)
                                 eq_final2 = df_con_sup[df_con_sup["id"] == sel_id].iloc[0]
                                 try:
+                                    register_submit(sel_id, req_name)   # ล็อกก่อน insert
                                     insert_row("consume_transactions", {
                                         "supply_id": sel_id,
                                         "requester_name": req_name.strip(),
@@ -1411,7 +1412,6 @@ def page_request():
                                     if new_avail2 <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
                                     load_sidebar_stats.clear()
-                                    register_submit(sel_id, req_name)
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
@@ -1548,6 +1548,7 @@ def page_request():
                                 st.session_state.pop("bor_pending_confirm", None)
                                 eq_final_b = df_bor_sup[df_bor_sup["id"] == sel_id_b].iloc[0]
                                 try:
+                                    register_submit(sel_id_b, bor_name)   # ล็อกก่อน insert
                                     existing_borr = query_table("office_borrowers", select="id",
                                                                 filters=[("phone","eq",bor_phone.strip())])
                                     if not existing_borr.empty:
@@ -1579,7 +1580,6 @@ def page_request():
                                     if new_avail_b <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
                                     load_sidebar_stats.clear()
-                                    register_submit(sel_id_b, bor_name)
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
@@ -1614,6 +1614,7 @@ def page_request():
                                 st.session_state.pop("bor_pending_confirm", None)
                                 eq_fb2 = df_bor_sup[df_bor_sup["id"] == sel_id_b].iloc[0]
                                 try:
+                                    register_submit(sel_id_b, bor_name)   # ล็อกก่อน insert
                                     existing_borr2 = query_table("office_borrowers", select="id",
                                                                  filters=[("phone","eq",bor_phone.strip())])
                                     borr_id2 = (int(existing_borr2.iloc[0]["id"]) if not existing_borr2.empty
@@ -1633,7 +1634,6 @@ def page_request():
                                     if new_avail_b2 <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
                                     load_sidebar_stats.clear()
-                                    register_submit(sel_id_b, bor_name)
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
                                     st.session_state["success_msg"] = (
