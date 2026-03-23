@@ -389,7 +389,7 @@ def delete_rows(table, match_col=None, match_val=None, delete_all=False):
     return _sb_retry(_do)
 
 # ─── Cached Stats ─────────────────────────────────────────────────────────────
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_sidebar_stats():
     df_sup = query_table("supplies", select="id,available_qty,group_type")
     total  = len(df_sup)
@@ -404,6 +404,12 @@ def load_sidebar_stats():
     df_consume = query_table("consume_transactions", select="id",
                              limit=1)  # just check exist
     return total, avail, n_borrow, n_overdue
+
+def clear_all_cache():
+    """เรียกหลังทุก write operation — clear cache ทั้งหมดที่เกี่ยวข้อง"""
+    clear_all_cache()
+    load_active_borrows.clear()
+    load_pending_borrows.clear()
 
 # ─── Batch Enrich ─────────────────────────────────────────────────────────────
 def _enrich_borrow(df_tx):
@@ -437,6 +443,7 @@ def _enrich_borrow(df_tx):
     )
     return merged
 
+@st.cache_data(ttl=10, show_spinner=False)
 def load_active_borrows():
     df = query_table("borrow_transactions",
                      select="id,supply_id,borrower_id,qty,borrow_date,due_date,note,return_date,condition_in,status",
@@ -444,6 +451,7 @@ def load_active_borrows():
                      order=[("due_date",{"desc":False})])
     return _enrich_borrow(df)
 
+@st.cache_data(ttl=10, show_spinner=False)
 def load_pending_borrows():
     df = query_table("borrow_transactions",
                      select="id,supply_id,borrower_id,qty,borrow_date,due_date,return_date,condition_in,note,status",
@@ -756,6 +764,15 @@ def page_dashboard():
     c4.metric("⚠️ เกินกำหนด", n_overdue, delta=f"{n_overdue}" if n_overdue > 0 else None,
               delta_color="inverse" if n_overdue > 0 else "off")
 
+    # ปุ่ม refresh manual
+    col_ref, col_time = st.columns([1, 3])
+    with col_ref:
+        if st.button("🔄 รีเฟรชข้อมูล", use_container_width=True, key="dash_refresh"):
+            clear_all_cache()
+            st.rerun()
+    with col_time:
+        st.caption(f"⏱️ อัพเดทอัตโนมัติทุก 30 วินาที | ล่าสุด: {datetime.now().strftime('%H:%M:%S')}")
+
     # กลุ่มอุปกรณ์ summary
     st.markdown('<div class="section-header">📂 สรุปตามกลุ่ม</div>', unsafe_allow_html=True)
     df_sup = query_table("supplies", select="id,available_qty,total_qty,group_name")
@@ -945,7 +962,7 @@ def page_inventory():
                                 st.error("❌ ลบไม่ได้ มีการยืมอยู่")
                             else:
                                 delete_rows("supplies", "id", r["id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.success("✅ ลบแล้ว")
                                 st.rerun()
 
@@ -1060,7 +1077,7 @@ def page_inventory():
                             # คงอยู่ที่รายการเดิมหลังบันทึก
                             st.session_state["_next_sup_sel"] = f"{sv_code} — {sv_name}"
 
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
@@ -1359,7 +1376,7 @@ def page_request():
                                     update_rows("supplies", {"available_qty": new_avail}, "id", sel_id)
                                     if new_avail <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
-                                    load_sidebar_stats.clear()
+                                    clear_all_cache()
                                     finish_submit()
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
@@ -1409,7 +1426,7 @@ def page_request():
                                     update_rows("supplies", {"available_qty": new_avail2}, "id", sel_id)
                                     if new_avail2 <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
-                                    load_sidebar_stats.clear()
+                                    clear_all_cache()
                                     finish_submit()
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
@@ -1582,7 +1599,7 @@ def page_request():
                                     update_rows("supplies", {"available_qty": new_avail_b}, "id", sel_id_b)
                                     if new_avail_b <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
-                                    load_sidebar_stats.clear()
+                                    clear_all_cache()
                                     finish_submit()
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
@@ -1637,7 +1654,7 @@ def page_request():
                                     update_rows("supplies", {"available_qty": new_avail_b2}, "id", sel_id_b)
                                     if new_avail_b2 <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
-                                    load_sidebar_stats.clear()
+                                    clear_all_cache()
                                     finish_submit()
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
@@ -1721,6 +1738,13 @@ def page_return():
     n_cancel = len(df_cancel_list)
     tab1, tab2, tab3 = st.tabs(["📬 แจ้งคืน", f"🔍 รอตรวจสอบ ({n_pending})", f"🚫 ยกเลิกรายการ ({n_cancel})"])
 
+    # ปุ่ม refresh สำหรับ Admin
+    if is_admin():
+        if st.button("🔄 รีเฟรชข้อมูล", key="return_refresh", use_container_width=False):
+            clear_all_cache()
+            st.rerun()
+        st.caption(f"ล่าสุด: {datetime.now().strftime('%H:%M:%S')}")
+
     with tab1:
         st.markdown(
             '<div class="info-box">📬 ค้นหารายการที่ยืมอยู่ → กรอกข้อมูล → กด แจ้งคืน<br>'
@@ -1802,7 +1826,7 @@ def page_return():
                                 "note": combined_note,
                                 "status": "รอตรวจสอบ"
                             }, "id", r["id"])
-                            load_sidebar_stats.clear()
+                            clear_all_cache()
                             st.session_state["show_return_success"] = {
                                 "sup_name": r["sup_name"],
                                 "qty": r["qty"],
@@ -1879,7 +1903,7 @@ def page_return():
                                         "available_qty": cur_a + delta,
                                         "status": new_stat
                                     }, "id", r["supply_id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.success(f"✅ รับคืนแล้ว สภาพ: {admin_cond}")
                                 st.rerun()
                         with cc2:
@@ -1887,7 +1911,7 @@ def page_return():
                                 update_rows("borrow_transactions", {
                                     "status": "ยืมอยู่", "return_date": None, "condition_in": None
                                 }, "id", r["id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.warning("↩️ ส่งกลับเป็น 'ยืมอยู่' แล้ว")
                                 st.rerun()
                     else:
@@ -1961,7 +1985,7 @@ def page_return():
                                             "available_qty": new_a,
                                             "status": new_stat
                                         }, "id", r["supply_id"])
-                                    load_sidebar_stats.clear()
+                                    clear_all_cache()
                                     st.success(f"🚫 ยกเลิก TX#{r['id']} เรียบร้อยแล้ว | เหตุผล: {cancel_reason.strip()}")
                                     st.rerun()
                                 except Exception as e:
@@ -2226,7 +2250,7 @@ def page_settings():
                                 imported += 1
                         except Exception:
                             pass
-                    load_sidebar_stats.clear()
+                    clear_all_cache()
                     st.success(f"✅ Import {imported} รายการสำเร็จ!")
                     st.rerun()
             except Exception as e:
@@ -2287,7 +2311,7 @@ def page_settings():
                             delete_rows("office_borrowers", delete_all=True)
                             delete_rows("supplies", delete_all=True)
                             st.success("✅ ล้างทุกอย่างเรียบร้อย")
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ {e}")
