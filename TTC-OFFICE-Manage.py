@@ -571,33 +571,81 @@ def page_home():
     st.markdown("---")
     st.markdown('<div class="section-header">🚀 ทำรายการ</div>', unsafe_allow_html=True)
 
-    # Quick action buttons ขนาดใหญ่
+    # CSS: ทำให้ปุ่ม Streamlit ครอบทั้ง card (absolute overlay)
+    st.markdown("""
+    <style>
+    /* wrapper สำหรับ card-button */
+    div[data-testid="stHorizontalBlock"] div[data-testid="stColumn"] .card-btn-wrap {
+        position: relative;
+    }
+    /* ปุ่ม Streamlit ที่อยู่ใน card-btn-wrap — ยืด absolute ครอบ card */
+    div.card-btn-wrap div.stButton > button {
+        position: absolute !important;
+        top: 0 !important; left: 0 !important;
+        width: 100% !important; height: 100% !important;
+        opacity: 0 !important;          /* ซ่อนปุ่ม แต่ยังกดได้ */
+        z-index: 10 !important;
+        cursor: pointer !important;
+        border-radius: 14px !important;
+    }
+    /* card ด้านล่าง */
+    div.card-btn-wrap .qcard {
+        background: white;
+        border-radius: 14px;
+        padding: 28px 16px 22px 16px;
+        border: 2px solid #d8ead2;
+        box-shadow: 0 3px 10px rgba(27,67,50,0.08);
+        text-align: center;
+        transition: all 0.18s ease;
+        cursor: pointer;
+        min-height: 130px;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 6px;
+    }
+    div.card-btn-wrap:hover .qcard {
+        border-color: #2D6A4F;
+        box-shadow: 0 6px 20px rgba(27,67,50,0.18);
+        transform: translateY(-3px);
+    }
+    div.card-btn-wrap .qcard .qicon { font-size: 2.6rem; line-height: 1; }
+    div.card-btn-wrap .qcard .qlabel {
+        font-size: 1.05rem; font-weight: 700; color: #1b4332;
+    }
+    div.card-btn-wrap .qcard .qsub {
+        font-size: 0.78rem; color: #52796F;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     col_a, col_b = st.columns(2)
+
     with col_a:
+        st.markdown('<div class="card-btn-wrap">', unsafe_allow_html=True)
         st.markdown("""
-        <div class="quick-btn" style="border-color:#2D6A4F;">
-            <div class="btn-icon">📋</div>
-            <div class="btn-label">เบิกอุปกรณ์</div>
-            <div class="btn-sub">สิ้นเปลือง / เบิก-คืน</div>
+        <div class="qcard" style="border-color:#2D6A4F;">
+            <div class="qicon">📋</div>
+            <div class="qlabel">เบิกอุปกรณ์</div>
+            <div class="qsub">สิ้นเปลือง / เบิก-คืน</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("📋 เบิกอุปกรณ์", key="home_to_request",
-                     use_container_width=True, type="primary"):
+        if st.button("เบิกอุปกรณ์", key="home_to_request", use_container_width=True):
             st.session_state.page = "เบิกอุปกรณ์"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_b:
+        st.markdown('<div class="card-btn-wrap">', unsafe_allow_html=True)
         st.markdown("""
-        <div class="quick-btn" style="border-color:#52796F;">
-            <div class="btn-icon">↩️</div>
-            <div class="btn-label">คืนอุปกรณ์</div>
-            <div class="btn-sub">แจ้งนำอุปกรณ์มาคืน</div>
+        <div class="qcard" style="border-color:#52796F;">
+            <div class="qicon">↩️</div>
+            <div class="qlabel">คืนอุปกรณ์</div>
+            <div class="qsub">แจ้งนำอุปกรณ์มาคืน</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("↩️ คืนอุปกรณ์", key="home_to_return",
-                     use_container_width=True, type="secondary"):
+        if st.button("คืนอุปกรณ์", key="home_to_return", use_container_width=True):
             st.session_state.page = "คืนอุปกรณ์"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ถ้าไม่ใช่ Admin — แสดงกล่องคำแนะนำ
     if not is_admin():
