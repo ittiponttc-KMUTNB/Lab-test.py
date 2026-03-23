@@ -3,6 +3,8 @@ import pandas as pd
 import json
 import time
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
+_TZ_BKK = ZoneInfo("Asia/Bangkok")
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -771,7 +773,7 @@ def page_dashboard():
             clear_all_cache()
             st.rerun()
     with col_time:
-        st.caption(f"⏱️ อัพเดทอัตโนมัติทุก 30 วินาที | ล่าสุด: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"⏱️ อัพเดทอัตโนมัติทุก 30 วินาที | ล่าสุด: {datetime.now(_TZ_BKK).strftime('%H:%M:%S')}")
 
     # กลุ่มอุปกรณ์ summary
     st.markdown('<div class="section-header">📂 สรุปตามกลุ่ม</div>', unsafe_allow_html=True)
@@ -1464,13 +1466,15 @@ def page_request():
             unsafe_allow_html=True)
 
         df_bor_sup = query_table("supplies",
-                                 select="id,code,name,group_name,unit,available_qty,image_url,description",
-                                 filters=[("group_type","eq","borrow"),("status","eq","พร้อมใช้")],
+                                 select="id,code,name,group_name,unit,available_qty,status,image_url,description",
+                                 filters=[("group_type","eq","borrow")],
                                  order=[("code",{"desc":False})])
-        df_bor_sup = df_bor_sup[df_bor_sup["available_qty"] > 0] if not df_bor_sup.empty else df_bor_sup
+        # กรองออกเฉพาะที่ชำรุด/สูญหาย — ยืมออกหมดยังแสดงแต่ disable
+        if not df_bor_sup.empty:
+            df_bor_sup = df_bor_sup[~df_bor_sup["status"].isin(["ชำรุด","สูญหาย"])]
 
         if df_bor_sup.empty:
-            st.warning("⚠️ ไม่มีอุปกรณ์เบิก-คืนพร้อมใช้งาน")
+            st.warning("⚠️ ไม่มีอุปกรณ์เบิก-คืนในระบบ")
         else:
             search_b = st.text_input("🔍 ค้นหาอุปกรณ์ที่ต้องการ", placeholder="ชื่ออุปกรณ์ หรือ รหัส", key="bor_search")
             df_fb = df_bor_sup.copy()
@@ -1482,13 +1486,21 @@ def page_request():
             if df_fb.empty:
                 st.info("ไม่พบรายการ")
             else:
-                opts_b = {f"{r['code']} — {r['name']}  ({r['available_qty']} {r.get('unit','ชิ้น')} คงเหลือ)": r["id"]
-                          for _, r in df_fb.iterrows()}
+                # แสดงทุกรายการ — ระบุสถานะในชื่อ
+                opts_b = {}
+                for _, r in df_fb.iterrows():
+                    avail = int(r["available_qty"])
+                    if avail > 0:
+                        label = f"{r['code']} — {r['name']}  ({avail} {r.get('unit','ชิ้น')} คงเหลือ)"
+                    else:
+                        label = f"{r['code']} — {r['name']}  ⛔ ยืมออกทั้งหมด"
+                    opts_b[label] = r["id"]
 
                 # ── STEP 1: เลือกอุปกรณ์ ──
                 if st.session_state.bor_step == 1:
                     sel_b = st.selectbox("เลือกอุปกรณ์ *", list(opts_b.keys()), key="bor_eq")
                     eq_b  = df_fb[df_fb["id"] == opts_b[sel_b]].iloc[0]
+                    avail_b = int(eq_b["available_qty"])
 
                     c_img2, c_info2 = st.columns([1, 2])
                     with c_img2:
@@ -1496,19 +1508,28 @@ def page_request():
                     with c_info2:
                         st.markdown(group_badge(eq_b.get("group_name","")), unsafe_allow_html=True)
                         st.markdown(f"**{eq_b['code']}** — {eq_b['name']}")
-                        st.markdown(f"คงเหลือ: **{eq_b['available_qty']}** {eq_b.get('unit','ชิ้น')}")
+                        if avail_b > 0:
+                            st.markdown(f"คงเหลือ: **{avail_b}** {eq_b.get('unit','ชิ้น')}")
+                        else:
+                            st.markdown(
+                                f'<span style="color:#D62828;font-weight:700;">⛔ ยืมออกทั้งหมด — ไม่สามารถเบิกได้</span>',
+                                unsafe_allow_html=True)
                         if eq_b.get("description"):
                             st.caption(eq_b["description"])
 
-                    qty_b = st.number_input("จำนวน *", min_value=1,
-                                            max_value=int(eq_b["available_qty"]), value=1, key="bor_qty")
-
-                    if st.button("ถัดไป → กรอกข้อมูลผู้ยืม", type="primary",
-                                 use_container_width=True, key="bor_next"):
-                        st.session_state["bor_selected_id"]  = int(opts_b[sel_b])
-                        st.session_state["bor_selected_qty"] = qty_b
-                        st.session_state.bor_step = 2
-                        st.rerun()
+                    if avail_b > 0:
+                        qty_b = st.number_input("จำนวน *", min_value=1,
+                                                max_value=avail_b, value=1, key="bor_qty")
+                        if st.button("ถัดไป → กรอกข้อมูลผู้ยืม", type="primary",
+                                     use_container_width=True, key="bor_next"):
+                            st.session_state["bor_selected_id"]  = int(opts_b[sel_b])
+                            st.session_state["bor_selected_qty"] = qty_b
+                            st.session_state.bor_step = 2
+                            st.rerun()
+                    else:
+                        st.button("⛔ ไม่สามารถเบิกได้ — ยืมออกทั้งหมด",
+                                  use_container_width=True, key="bor_next", disabled=True)
+                        st.info("💡 กรุณารอจนกว่าจะมีการคืนอุปกรณ์ หรือติดต่อ Admin")
 
                 # ── STEP 2: ข้อมูลผู้ยืม + วันที่ ──
                 elif st.session_state.bor_step == 2:
@@ -1743,7 +1764,7 @@ def page_return():
         if st.button("🔄 รีเฟรชข้อมูล", key="return_refresh", use_container_width=False):
             clear_all_cache()
             st.rerun()
-        st.caption(f"ล่าสุด: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"ล่าสุด: {datetime.now(_TZ_BKK).strftime('%H:%M:%S')}")
 
     with tab1:
         st.markdown(
