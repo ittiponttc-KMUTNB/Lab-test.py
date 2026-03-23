@@ -1132,11 +1132,65 @@ def render_step_bar(current_step: int, steps: list):
 def page_request():
     st.markdown('<div class="page-title">📋 เบิกอุปกรณ์</div>', unsafe_allow_html=True)
 
-    # แสดง balloons + รายละเอียดหลัง rerun (flag จาก submit สำเร็จ)
-    if st.session_state.pop("show_balloons", False):
-        msg = st.session_state.pop("success_msg", "✅ บันทึกรายการสำเร็จ!")
-        st.success(msg)
+    # ── Success Screen เต็มหน้าจอ ──
+    if st.session_state.get("show_balloons"):
+        st.session_state.pop("show_balloons", None)
+        msg_raw = st.session_state.pop("success_msg", "")
+
+        # แยกบรรทัดจาก success_msg มาแสดงสวยงาม
+        lines = [l.strip() for l in msg_raw.split("\n") if l.strip()]
+        detail_html = "".join(
+            f'<div style="margin:6px 0;font-size:1.05rem;line-height:1.7;">{l}</div>'
+            for l in lines[1:]  # ข้าม "✅ บันทึกสำเร็จ!" บรรทัดแรก
+        )
+
+        st.markdown(f"""
+        <style>
+        /* ซ่อนทุกอย่างยกเว้น success screen */
+        .success-screen-wrap ~ div,
+        .success-screen-wrap ~ section {{ display: none !important; }}
+        </style>
+        <div class="success-screen-wrap" style="
+            min-height: 80vh;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            text-align: center; padding: 24px 20px;
+        ">
+            <div style="font-size:5rem; margin-bottom:12px; animation: pop 0.4s ease;">🎉</div>
+            <div style="
+                font-size:1.6rem; font-weight:800; color:#1b4332;
+                margin-bottom:8px;
+            ">บันทึกสำเร็จ!</div>
+            <div style="
+                background:#eaf2ee; border:2px solid #b7d5c7;
+                border-radius:16px; padding:20px 24px;
+                max-width:420px; width:100%;
+                text-align:left; margin:16px 0 24px 0;
+                color:#1b4332;
+            ">
+                {detail_html}
+            </div>
+        </div>
+        <style>
+        @keyframes pop {{
+            0%   {{ transform: scale(0.5); opacity:0; }}
+            70%  {{ transform: scale(1.2); }}
+            100% {{ transform: scale(1);   opacity:1; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+
         st.balloons()
+
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            if st.button("📋 เบิกอุปกรณ์อีกครั้ง", type="primary",
+                         use_container_width=True, key="back_to_request"):
+                st.rerun()
+            if st.button("🏠 กลับหน้าหลัก", use_container_width=True, key="back_to_home"):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+        return   # หยุด render ส่วนที่เหลือของหน้า
 
     # CSS: Tab ชัดเจนขึ้น
     st.markdown("""
