@@ -545,7 +545,7 @@ def render_header():
 
 
 def render_top_nav():
-    """Navigation ปุ่มแถวบน — ใต้ header เสมอ ใช้ Streamlit button จริง"""
+    """Navigation ปุ่มแถวบน — ใต้ header เสมอ"""
     page = st.session_state.get("page", "หน้าหลัก")
 
     if is_admin():
@@ -565,10 +565,9 @@ def render_top_nav():
             ("คลังอุปกรณ์", "📦", "คลัง"),
         ]
     else:
+        # ผู้ใช้ทั่วไป — เห็นแค่ปุ่มหน้าหลัก (เบิก/คืนอยู่ใน card แล้ว)
         nav_items = [
-            ("หน้าหลัก",    "🏠", "หน้าหลัก"),
-            ("เบิกอุปกรณ์", "📋", "เบิก"),
-            ("คืนอุปกรณ์",  "↩️", "คืน"),
+            ("หน้าหลัก", "🏠", "🏠 หน้าหลัก"),
         ]
 
     cols = st.columns(len(nav_items))
@@ -576,7 +575,7 @@ def render_top_nav():
         with cols[i]:
             is_active = page == pname
             if st.button(
-                f"{icon}\n{label}",
+                f"{icon}\n{label}" if is_admin() else label,
                 key=f"tnav_{pname}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary"
@@ -714,7 +713,6 @@ def page_home():
             if st.button("📦 จัดการคลัง", use_container_width=True, key="home_to_inv"):
                 st.session_state.page = "คลังอุปกรณ์"
                 st.rerun()
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: DASHBOARD
