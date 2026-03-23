@@ -571,72 +571,49 @@ def page_home():
     st.markdown("---")
     st.markdown('<div class="section-header">🚀 ทำรายการ</div>', unsafe_allow_html=True)
 
-    # CSS: ซ่อนปุ่ม Streamlit จริงๆ แล้วให้ JS เรียกแทนเมื่อกด card
+    # CSS: ทำให้ปุ่ม Streamlit หน้าตาเป็น card ใหญ่เลย
     st.markdown("""
     <style>
-    /* ซ่อนปุ่ม Streamlit — ยังอยู่ใน DOM แต่มองไม่เห็น */
-    #btn-request, #btn-return { display:none !important; }
-
-    /* Card style */
-    .qcard {
-        background: white;
-        border-radius: 14px;
-        padding: 28px 16px 22px 16px;
-        border: 2px solid #d8ead2;
-        box-shadow: 0 3px 10px rgba(27,67,50,0.08);
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.18s ease;
-        min-height: 130px;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 6px;
-        user-select: none;
+    /* target เฉพาะ 2 ปุ่มนี้ผ่าน key */
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"],
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"] {
+        height: 130px !important;
+        border-radius: 14px !important;
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        white-space: pre-line !important;
+        line-height: 1.6 !important;
+        padding: 16px 12px !important;
+        border: 2px solid #d8ead2 !important;
+        background: white !important;
+        color: #1b4332 !important;
+        box-shadow: 0 3px 10px rgba(27,67,50,0.08) !important;
+        transition: all 0.18s ease !important;
     }
-    .qcard:hover {
-        border-color: #2D6A4F;
-        box-shadow: 0 6px 20px rgba(27,67,50,0.18);
-        transform: translateY(-3px);
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:hover,
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:hover {
+        border-color: #2D6A4F !important;
+        box-shadow: 0 6px 20px rgba(27,67,50,0.18) !important;
+        transform: translateY(-3px) !important;
+        background: #f4fbf7 !important;
+        color: #1b4332 !important;
     }
-    .qcard:active { transform: scale(0.97); }
-    .qcard .qicon { font-size: 2.6rem; line-height: 1; }
-    .qcard .qlabel { font-size: 1.05rem; font-weight: 700; color: #1b4332; }
-    .qcard .qsub   { font-size: 0.78rem; color: #52796F; }
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:active,
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:active {
+        transform: scale(0.97) !important;
+    }
     </style>
-
-    <script>
-    function clickBtn(btnKey) {
-        // หา button ที่มี key ตรงกัน แล้วคลิก
-        const btns = window.parent.document.querySelectorAll('button');
-        for (const b of btns) {
-            if (b.innerText.trim() === btnKey) { b.click(); break; }
-        }
-    }
-    </script>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
-        <div class="qcard" style="border-color:#2D6A4F;"
-             onclick="clickBtn('__REQ__')">
-            <div class="qicon">📋</div>
-            <div class="qlabel">เบิกอุปกรณ์</div>
-            <div class="qsub">สิ้นเปลือง / เบิก-คืน</div>
-        </div>
-        <div class="qcard" style="border-color:#52796F;"
-             onclick="clickBtn('__RET__')">
-            <div class="qicon">↩️</div>
-            <div class="qlabel">คืนอุปกรณ์</div>
-            <div class="qsub">แจ้งนำอุปกรณ์มาคืน</div>
-        </div>
-    </div>
     """, unsafe_allow_html=True)
 
-    # ปุ่มจริง — ซ่อนด้วย CSS label พิเศษ แล้ว JS จะ trigger
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("__REQ__", key="home_to_request", use_container_width=True):
+        if st.button("📋\nเบิกอุปกรณ์\nสิ้นเปลือง / เบิก-คืน",
+                     key="home_to_request", use_container_width=True):
             st.session_state.page = "เบิกอุปกรณ์"
             st.rerun()
     with col_b:
-        if st.button("__RET__", key="home_to_return", use_container_width=True):
+        if st.button("↩️\nคืนอุปกรณ์\nแจ้งนำอุปกรณ์มาคืน",
+                     key="home_to_return", use_container_width=True):
             st.session_state.page = "คืนอุปกรณ์"
             st.rerun()
 
