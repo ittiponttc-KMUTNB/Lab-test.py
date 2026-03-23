@@ -1263,7 +1263,7 @@ def page_request():
             # กรอง group
             groups_avail = sorted(df_con_sup["group_name"].dropna().unique().tolist())
             g_sel = st.selectbox("📂 กลุ่มอุปกรณ์", ["ทั้งหมด"] + groups_avail, key="con_grp")
-            search_c = st.text_input("🔍 ค้นหา", placeholder="ชื่อ หรือ รหัส", key="con_search")
+            search_c = st.text_input("🔍 ค้นหาอุปกรณ์ที่ต้องการ", placeholder="ชื่ออุปกรณ์ หรือ รหัส", key="con_search")
 
             df_f = df_con_sup.copy()
             if g_sel != "ทั้งหมด":
@@ -1321,7 +1321,7 @@ def page_request():
                             f'</div>', unsafe_allow_html=True)
 
                     st.markdown('<div class="section-header">👤 ข้อมูลผู้เบิก</div>', unsafe_allow_html=True)
-                    req_name = st.text_input("ชื่อ-นามสกุล *", placeholder="กรอกชื่อ-นามสกุล", key="con_name")
+                    req_name = st.text_input("ชื่อ-นามสกุลผู้เบิก *", placeholder="กรอกชื่อ-นามสกุล", key="con_name")
                     req_type = st.radio("ประเภท", ["นักศึกษา","บุคลากร/อาจารย์"], horizontal=True, key="con_type")
                     req_dept = st.text_input("ภาควิชา / หน่วยงาน", key="con_dept")
                     purpose  = st.text_input("วัตถุประสงค์ (ถ้ามี)", key="con_purpose")
@@ -1454,7 +1454,7 @@ def page_request():
         if df_bor_sup.empty:
             st.warning("⚠️ ไม่มีอุปกรณ์เบิก-คืนพร้อมใช้งาน")
         else:
-            search_b = st.text_input("🔍 ค้นหา", placeholder="ชื่อ หรือ รหัส", key="bor_search")
+            search_b = st.text_input("🔍 ค้นหาอุปกรณ์ที่ต้องการ", placeholder="ชื่ออุปกรณ์ หรือ รหัส", key="bor_search")
             df_fb = df_bor_sup.copy()
             if search_b:
                 mask = (df_fb["name"].str.contains(search_b, case=False, na=False) |
@@ -1660,6 +1660,54 @@ def page_request():
 def page_return():
     st.markdown('<div class="page-title">↩️ คืนอุปกรณ์</div>', unsafe_allow_html=True)
 
+    # ── Return Success Screen เต็มหน้าจอ ──
+    if st.session_state.get("show_return_success"):
+        info = st.session_state.pop("show_return_success")
+        st.markdown(f"""
+        <div style="
+            min-height:78vh; display:flex; flex-direction:column;
+            align-items:center; justify-content:center;
+            text-align:center; padding:24px 20px;
+        ">
+            <div style="font-size:5rem; margin-bottom:12px;
+                        animation: pop 0.4s ease;">📬</div>
+            <div style="font-size:1.6rem; font-weight:800; color:#1a5276;
+                        margin-bottom:8px;">แจ้งคืนสำเร็จ!</div>
+            <div style="font-size:0.95rem; color:#52796F; margin-bottom:16px;">
+                รอ Admin ตรวจสอบและยืนยันรับคืน
+            </div>
+            <div style="
+                background:#eaf4fb; border:2px solid #aed6f1;
+                border-radius:16px; padding:20px 24px;
+                max-width:420px; width:100%;
+                text-align:left; color:#1a5276;
+            ">
+                <div style="margin:6px 0;font-size:1.05rem;">🔌 <b>{info['sup_name']}</b> ({info['qty']} {info['unit']})</div>
+                <div style="margin:6px 0;font-size:1.05rem;">👤 {info['ret_name']}</div>
+                <div style="margin:6px 0;font-size:1.05rem;">📅 วันที่คืน: {info['ret_date']}</div>
+                <div style="margin:6px 0;font-size:1.05rem;">🔍 สภาพ: {info['cond_in']}</div>
+            </div>
+        </div>
+        <style>
+        @keyframes pop {{
+            0%   {{ transform: scale(0.5); opacity:0; }}
+            70%  {{ transform: scale(1.2); }}
+            100% {{ transform: scale(1);   opacity:1; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            if st.button("↩️ คืนอุปกรณ์อีกชิ้น", type="primary",
+                         use_container_width=True, key="back_to_return"):
+                st.rerun()
+            if st.button("🏠 กลับหน้าหลัก", use_container_width=True,
+                         key="return_to_home"):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+        return   # หยุด render ส่วนที่เหลือ
+
     df_pending = load_pending_borrows()
     n_pending = len(df_pending)
     # นับรายการที่ยกเลิกได้ (ยืมอยู่ + รอตรวจสอบ)
@@ -1749,8 +1797,15 @@ def page_return():
                                 "note": combined_note,
                                 "status": "รอตรวจสอบ"
                             }, "id", r["id"])
-                            st.success("📬 แจ้งคืนแล้ว! รอ Admin ตรวจสอบ")
                             load_sidebar_stats.clear()
+                            st.session_state["show_return_success"] = {
+                                "sup_name": r["sup_name"],
+                                "qty": r["qty"],
+                                "unit": "ชิ้น",
+                                "ret_name": ret_name.strip(),
+                                "ret_date": str(ret_date),
+                                "cond_in": cond_in,
+                            }
                             st.rerun()
 
     with tab2:
