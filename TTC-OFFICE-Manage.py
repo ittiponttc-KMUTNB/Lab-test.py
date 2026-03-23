@@ -238,6 +238,36 @@ div[data-testid="metric-container"] {
 .step-line.done { background: #2D6A4F; }
 
 button[kind="primary"] { font-weight: 700; }
+
+/* ── Tabs — ทุกหน้า ── */
+div[data-testid="stTabs"] > div:first-child {
+    background: #eaf2ee;
+    border-radius: 10px;
+    padding: 4px;
+}
+div[data-testid="stTabs"] div[role="tablist"] {
+    border-bottom: none !important;
+    gap: 4px;
+}
+div[data-testid="stTabs"] button[role="tab"] {
+    border-radius: 8px !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    padding: 8px 14px !important;
+    color: #52796F !important;
+    background: transparent !important;
+    border: none !important;
+    transition: all 0.15s ease !important;
+}
+div[data-testid="stTabs"] button[role="tab"]:hover {
+    background: #d4eadd !important;
+    color: #1b4332 !important;
+}
+div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    background: #1b4332 !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(27,67,50,0.25) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1014,6 +1044,49 @@ def render_step_bar(current_step: int, steps: list):
 # ═════════════════════════════════════════════════════════════════════════════
 def page_request():
     st.markdown('<div class="page-title">📋 เบิกอุปกรณ์</div>', unsafe_allow_html=True)
+
+    # CSS: Tab ชัดเจนขึ้น
+    st.markdown("""
+    <style>
+    /* Tab bar background */
+    div[data-testid="stTabs"] > div:first-child {
+        background: #eaf2ee;
+        border-radius: 10px;
+        padding: 4px;
+        gap: 4px;
+    }
+    /* Tab ทั่วไป */
+    div[data-testid="stTabs"] button[role="tab"] {
+        border-radius: 8px !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        padding: 8px 16px !important;
+        color: #52796F !important;
+        background: transparent !important;
+        border: none !important;
+        transition: all 0.15s ease !important;
+    }
+    /* Tab hover */
+    div[data-testid="stTabs"] button[role="tab"]:hover {
+        background: #d4eadd !important;
+        color: #1b4332 !important;
+    }
+    /* Tab active */
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        background: #1b4332 !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(27,67,50,0.25) !important;
+    }
+    /* ซ่อน underline เดิมของ Streamlit */
+    div[data-testid="stTabs"] button[role="tab"] div[data-testid="stMarkdownContainer"] p {
+        font-size: 0.95rem !important;
+    }
+    div[data-testid="stTabs"] div[role="tablist"] {
+        border-bottom: none !important;
+        gap: 4px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # แยก tab ตามประเภท
     tab_con, tab_borrow = st.tabs(["🖊️ สิ้นเปลือง (ไม่คืน)", "🔌 เบิก-คืน"])
