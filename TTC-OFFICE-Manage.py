@@ -541,13 +541,23 @@ def render_bottom_nav():
     page = st.session_state.get("page", "หน้าหลัก")
 
     if is_admin():
-        # Admin เห็น nav ครบ
+        # นับรายการรอตรวจสอบ เพื่อแสดง badge
+        try:
+            df_pend = query_table("borrow_transactions", select="id",
+                                  filters=[("status","eq","รอตรวจสอบ")])
+            n_pending = len(df_pend)
+        except Exception:
+            n_pending = 0
+
+        pending_badge = f" ({n_pending})" if n_pending > 0 else ""
+
+        # Admin — จัดลำดับตามความถี่ใช้งาน
         nav_items = [
-            ("หน้าหลัก",   "🏠", "หน้าหลัก"),
-            ("เบิกอุปกรณ์","📋", "เบิก"),
-            ("คืนอุปกรณ์", "↩️", "คืน"),
-            ("Dashboard",  "📊", "ภาพรวม"),
-            ("คลังอุปกรณ์","📦", "คลัง"),
+            ("หน้าหลัก",   "🏠",  "หน้าหลัก"),
+            ("เบิกอุปกรณ์","📋",  "เบิก"),
+            ("คืนอุปกรณ์", "🔍",  f"ตรวจสอบ{pending_badge}"),
+            ("Dashboard",  "📊",  "ภาพรวม"),
+            ("คลังอุปกรณ์","📦",  "คลัง"),
         ]
     else:
         # ผู้ใช้ทั่วไป — เห็นแค่ 3 เมนูหลัก
@@ -557,12 +567,27 @@ def render_bottom_nav():
             ("คืนอุปกรณ์", "↩️", "คืน"),
         ]
 
+    # CSS badge สีแดงบน bottom nav
+    st.markdown("""
+    <style>
+    .bnav-badge {
+        display: inline-block;
+        background: #C0392B; color: white;
+        border-radius: 10px; font-size: 0.6rem;
+        padding: 1px 5px; font-weight: 700;
+        margin-left: 2px; vertical-align: top;
+        line-height: 1.4;
+    }
+    /* ปุ่ม bottom nav จริง — ซ่อนใต้แถบ */
+    div[data-testid="stBottom"] { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
     links_html = ""
     for pname, icon, label in nav_items:
         active_cls = "active" if page == pname else ""
         links_html += (
-            f'<a class="{active_cls}" onclick="void(0)" '
-            f'style="cursor:pointer;">'
+            f'<a class="{active_cls}" onclick="void(0)" style="cursor:pointer;">'
             f'<span class="bnav-icon">{icon}</span>{label}</a>'
         )
 
@@ -571,7 +596,7 @@ def render_bottom_nav():
         unsafe_allow_html=True
     )
 
-    # ปุ่มจริงของ Streamlit — ซ่อนไว้ใต้ bottom nav แต่ยังทำงานได้
+    # ปุ่มจริงของ Streamlit
     cols = st.columns(len(nav_items))
     for i, (pname, icon, label) in enumerate(nav_items):
         with cols[i]:
@@ -694,12 +719,16 @@ def page_home():
         # Admin เห็น shortcut ไปหน้าอื่น
         st.markdown("---")
         st.markdown('<div class="section-header">⚡ Admin Shortcuts</div>', unsafe_allow_html=True)
-        col_x, col_y = st.columns(2)
+        col_x, col_y, col_z = st.columns(3)
         with col_x:
-            if st.button("📊 Dashboard ภาพรวม", use_container_width=True, key="home_to_dash"):
+            if st.button("📊 ภาพรวม", use_container_width=True, key="home_to_dash"):
                 st.session_state.page = "Dashboard"
                 st.rerun()
         with col_y:
+            if st.button("🔍 ตรวจสอบการคืน", use_container_width=True, key="home_to_return_admin"):
+                st.session_state.page = "คืนอุปกรณ์"
+                st.rerun()
+        with col_z:
             if st.button("📦 จัดการคลัง", use_container_width=True, key="home_to_inv"):
                 st.session_state.page = "คลังอุปกรณ์"
                 st.rerun()
