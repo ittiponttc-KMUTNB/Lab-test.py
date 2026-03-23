@@ -1063,7 +1063,40 @@ def page_inventory():
     else:
         st.info("🔒 การเพิ่ม/แก้ไขอุปกรณ์ สำหรับ Admin เท่านั้น")
 
-# ─── Step Wizard Helper ───────────────────────────────────────────────────────
+# ─── Duplicate Submit Guard (Session Timestamp) ───────────────────────────────
+DUPLICATE_GUARD_SECONDS = 10
+
+def _make_submit_key(supply_id, name):
+    """สร้าง key จาก supply_id + ชื่อผู้เบิก"""
+    return f"{supply_id}|{name.strip().lower()}"
+
+def check_duplicate_submit(supply_id, name):
+    """
+    คืนค่า:
+      "ok"        — ไม่ซ้ำ ผ่านได้เลย
+      "duplicate" — กดซ้ำภายใน DUPLICATE_GUARD_SECONDS วินาที
+    """
+    key = _make_submit_key(supply_id, name)
+    last = st.session_state.get("last_submit_guard")
+    if last and last["key"] == key:
+        elapsed = time.time() - last["ts"]
+        if elapsed < DUPLICATE_GUARD_SECONDS:
+            return "duplicate"
+    return "ok"
+
+def register_submit(supply_id, name):
+    """บันทึก timestamp หลัง submit สำเร็จ"""
+    st.session_state["last_submit_guard"] = {
+        "key": _make_submit_key(supply_id, name),
+        "ts": time.time()
+    }
+
+def clear_submit_guard():
+    """ล้าง guard (เมื่อผู้ใช้ยืนยัน ยืม 2 รอบ)"""
+    st.session_state.pop("last_submit_guard", None)
+
+
+
 def render_step_bar(current_step: int, steps: list):
     """แสดง progress bar แบบ step wizard"""
     html = '<div class="step-bar">'
@@ -1099,9 +1132,10 @@ def render_step_bar(current_step: int, steps: list):
 def page_request():
     st.markdown('<div class="page-title">📋 เบิกอุปกรณ์</div>', unsafe_allow_html=True)
 
-    # แสดง balloons หลัง rerun (flag จาก submit สำเร็จ)
+    # แสดง balloons + รายละเอียดหลัง rerun (flag จาก submit สำเร็จ)
     if st.session_state.pop("show_balloons", False):
-        st.success("✅ บันทึกรายการสำเร็จ!")
+        msg = st.session_state.pop("success_msg", "✅ บันทึกรายการสำเร็จ!")
+        st.success(msg)
         st.balloons()
 
     # CSS: Tab ชัดเจนขึ้น
@@ -1253,7 +1287,10 @@ def page_request():
                                 st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า")
                             elif sel_id is None:
                                 st.error("❌ กรุณาเลือกอุปกรณ์ใหม่")
+                            elif check_duplicate_submit(sel_id, req_name) == "duplicate":
+                                st.session_state["con_pending_confirm"] = True
                             else:
+                                st.session_state.pop("con_pending_confirm", None)
                                 eq_final = df_con_sup[df_con_sup["id"] == sel_id].iloc[0]
                                 try:
                                     insert_row("consume_transactions", {
@@ -1271,19 +1308,75 @@ def page_request():
                                     if new_avail <= 0:
                                         update_rows("supplies", {"status": "หมด"}, "id", sel_id)
                                     load_sidebar_stats.clear()
-                                    st.success(
-                                        f"✅ บันทึกสำเร็จ!\n\n"
-                                        f"👤 **{req_name}** เบิก {eq_final['name']} "
-                                        f"จำนวน {sel_qty} {eq_final.get('unit','ชิ้น')}"
-                                    )
-                                    # reset step + flag balloons
+                                    register_submit(sel_id, req_name)
                                     st.session_state.con_step = 1
                                     st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ!\n\n"
+                                        f"👤 **{req_name}** ({req_type})"
+                                        + (f" — {req_dept}" if req_dept else "")
+                                        + f"\n📦 {eq_final['name']} จำนวน **{sel_qty} {eq_final.get('unit','ชิ้น')}**"
+                                        + f"\n📅 วันที่เบิก: {req_date}"
+                                    )
                                     for k in ["con_selected_id","con_selected_label","con_selected_qty"]:
                                         st.session_state.pop(k, None)
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
+                    # ── Duplicate Warning Dialog ──
+                    if st.session_state.get("con_pending_confirm"):
+                        eq_dup = df_con_sup[df_con_sup["id"] == sel_id] if sel_id else pd.DataFrame()
+                        eq_name_dup = eq_dup.iloc[0]["name"] if not eq_dup.empty else "?"
+                        st.warning(
+                            f"⚠️ **กดซ้ำภายใน {DUPLICATE_GUARD_SECONDS} วินาที!**\n\n"
+                            f"รายการล่าสุดอาจถูกบันทึกไปแล้ว\n"
+                            f"👤 **{req_name}** — **{eq_name_dup}** x{sel_qty}\n\n"
+                            f"ต้องการเบิก **2 รอบ** จริงหรือไม่?"
+                        )
+                        c_yes, c_no = st.columns(2)
+                        with c_yes:
+                            if st.button("✅ ใช่ เบิก 2 รอบ", type="primary",
+                                         use_container_width=True, key="con_confirm_yes"):
+                                clear_submit_guard()
+                                st.session_state.pop("con_pending_confirm", None)
+                                eq_final2 = df_con_sup[df_con_sup["id"] == sel_id].iloc[0]
+                                try:
+                                    insert_row("consume_transactions", {
+                                        "supply_id": sel_id,
+                                        "requester_name": req_name.strip(),
+                                        "requester_type": req_type,
+                                        "department": req_dept or None,
+                                        "qty": sel_qty,
+                                        "request_date": str(req_date),
+                                        "purpose": purpose or None,
+                                        "status": "เบิกแล้ว"
+                                    })
+                                    new_avail2 = int(eq_final2["available_qty"]) - sel_qty
+                                    update_rows("supplies", {"available_qty": new_avail2}, "id", sel_id)
+                                    if new_avail2 <= 0:
+                                        update_rows("supplies", {"status": "หมด"}, "id", sel_id)
+                                    load_sidebar_stats.clear()
+                                    register_submit(sel_id, req_name)
+                                    st.session_state.con_step = 1
+                                    st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ! (รอบที่ 2)\n\n"
+                                        f"👤 **{req_name}** ({req_type})"
+                                        + f"\n📦 {eq_final2['name']} จำนวน **{sel_qty} {eq_final2.get('unit','ชิ้น')}**"
+                                        + f"\n📅 วันที่เบิก: {req_date}"
+                                    )
+                                    for k in ["con_selected_id","con_selected_label","con_selected_qty"]:
+                                        st.session_state.pop(k, None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                        with c_no:
+                            if st.button("❌ ยกเลิก ไม่เบิกซ้ำ", use_container_width=True,
+                                         key="con_confirm_no"):
+                                st.session_state.pop("con_pending_confirm", None)
+                                st.info("ℹ️ ยกเลิกแล้ว รายการไม่ถูกบันทึกซ้ำ")
+                                st.rerun()
 
     # ── TAB 2: เบิก-ยืม (borrow type — ต้องคืน) ─────────────────────────────
     with tab_borrow:
@@ -1395,7 +1488,10 @@ def page_request():
                                 st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
                             elif sel_id_b is None:
                                 st.error("❌ กรุณาเลือกอุปกรณ์ใหม่")
+                            elif check_duplicate_submit(sel_id_b, bor_name) == "duplicate":
+                                st.session_state["bor_pending_confirm"] = True
                             else:
+                                st.session_state.pop("bor_pending_confirm", None)
                                 eq_final_b = df_bor_sup[df_bor_sup["id"] == sel_id_b].iloc[0]
                                 try:
                                     existing_borr = query_table("office_borrowers", select="id",
@@ -1425,24 +1521,84 @@ def page_request():
                                         "status": "ยืมอยู่"
                                     })
                                     new_avail_b = int(eq_final_b["available_qty"]) - sel_qty_b
-                                    update_rows("supplies", {"available_qty": new_avail_b},
-                                                "id", sel_id_b)
+                                    update_rows("supplies", {"available_qty": new_avail_b}, "id", sel_id_b)
                                     if new_avail_b <= 0:
                                         update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
                                     load_sidebar_stats.clear()
-                                    st.success(
-                                        f"✅ บันทึกสำเร็จ!\n\n"
-                                        f"👤 **{bor_name}** ยืม {eq_final_b['name']} x{sel_qty_b}\n"
-                                        f"📅 กำหนดคืน: {due_date}"
-                                    )
-                                    # reset step + flag balloons
+                                    register_submit(sel_id_b, bor_name)
                                     st.session_state.bor_step = 1
                                     st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ!\n\n"
+                                        f"👤 **{bor_name}** ({bor_type})"
+                                        + (f" — {bor_dept}" if bor_dept else "")
+                                        + (f" | 📞 {bor_phone}" if bor_phone else "")
+                                        + f"\n🔌 {eq_final_b['name']} จำนวน **{sel_qty_b} {eq_final_b.get('unit','ชิ้น')}**"
+                                        + f"\n📅 เบิก: {borrow_date} | กำหนดคืน: **{due_date}**"
+                                    )
                                     for k in ["bor_selected_id","bor_selected_qty"]:
                                         st.session_state.pop(k, None)
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
+                    # ── Duplicate Warning Dialog (borrow) ──
+                    if st.session_state.get("bor_pending_confirm"):
+                        eq_dup_b = df_bor_sup[df_bor_sup["id"] == sel_id_b] if sel_id_b else pd.DataFrame()
+                        eq_name_dup_b = eq_dup_b.iloc[0]["name"] if not eq_dup_b.empty else "?"
+                        st.warning(
+                            f"⚠️ **กดซ้ำภายใน {DUPLICATE_GUARD_SECONDS} วินาที!**\n\n"
+                            f"รายการล่าสุดอาจถูกบันทึกไปแล้ว\n"
+                            f"👤 **{bor_name}** — **{eq_name_dup_b}** x{sel_qty_b}\n\n"
+                            f"ต้องการยืม **2 รอบ** จริงหรือไม่?"
+                        )
+                        cb_yes, cb_no = st.columns(2)
+                        with cb_yes:
+                            if st.button("✅ ใช่ ยืม 2 รอบ", type="primary",
+                                         use_container_width=True, key="bor_confirm_yes"):
+                                clear_submit_guard()
+                                st.session_state.pop("bor_pending_confirm", None)
+                                eq_fb2 = df_bor_sup[df_bor_sup["id"] == sel_id_b].iloc[0]
+                                try:
+                                    existing_borr2 = query_table("office_borrowers", select="id",
+                                                                 filters=[("phone","eq",bor_phone.strip())])
+                                    borr_id2 = (int(existing_borr2.iloc[0]["id"]) if not existing_borr2.empty
+                                                else int(insert_row("office_borrowers", {
+                                                    "name": bor_name.strip(), "type": bor_type,
+                                                    "student_id": bor_sid or None, "department": bor_dept or None,
+                                                    "phone": bor_phone.strip()
+                                                })["id"]))
+                                    insert_row("borrow_transactions", {
+                                        "supply_id": sel_id_b, "borrower_id": borr_id2,
+                                        "qty": sel_qty_b, "borrow_date": str(borrow_date),
+                                        "due_date": str(due_date), "condition_out": cond_out,
+                                        "note": note_b or None, "status": "ยืมอยู่"
+                                    })
+                                    new_avail_b2 = int(eq_fb2["available_qty"]) - sel_qty_b
+                                    update_rows("supplies", {"available_qty": new_avail_b2}, "id", sel_id_b)
+                                    if new_avail_b2 <= 0:
+                                        update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
+                                    load_sidebar_stats.clear()
+                                    register_submit(sel_id_b, bor_name)
+                                    st.session_state.bor_step = 1
+                                    st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ! (รอบที่ 2)\n\n"
+                                        f"👤 **{bor_name}** ({bor_type})"
+                                        + f"\n🔌 {eq_fb2['name']} จำนวน **{sel_qty_b} {eq_fb2.get('unit','ชิ้น')}**"
+                                        + f"\n📅 เบิก: {borrow_date} | กำหนดคืน: **{due_date}**"
+                                    )
+                                    for k in ["bor_selected_id","bor_selected_qty"]:
+                                        st.session_state.pop(k, None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                        with cb_no:
+                            if st.button("❌ ยกเลิก ไม่ยืมซ้ำ", use_container_width=True,
+                                         key="bor_confirm_no"):
+                                st.session_state.pop("bor_pending_confirm", None)
+                                st.info("ℹ️ ยกเลิกแล้ว รายการไม่ถูกบันทึกซ้ำ")
+                                st.rerun()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: RETURN (คืนอุปกรณ์)
