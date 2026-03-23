@@ -458,7 +458,7 @@ def load_pending_borrows():
     df = query_table("borrow_transactions",
                      select="id,supply_id,borrower_id,qty,borrow_date,due_date,return_date,condition_in,note,status",
                      filters=[("status","eq","รอตรวจสอบ")],
-                     order=[("return_date",{"desc":False})])
+                     order=[("id",{"desc":True})])
     return _enrich_borrow(df)
 
 # ─── Cloudinary ───────────────────────────────────────────────────────────────
@@ -604,12 +604,21 @@ def render_bottom_nav():
             f'<span class="bnav-icon">{icon}</span>{label}</a>'
         )
 
+    # CSS ซ่อนปุ่ม Streamlit ทั้งหมดใน bottom nav wrapper
+    st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"]:has(button[key^="bnav_"]) {
+        display: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown(
         f'<div class="bottom-nav">{links_html}</div>',
         unsafe_allow_html=True
     )
 
-    # ปุ่มจริงของ Streamlit
+    # ปุ่มจริง Streamlit — ซ่อนด้วย CSS ข้างบน แต่ยังทำงานได้
     cols = st.columns(len(nav_items))
     for i, (pname, icon, label) in enumerate(nav_items):
         with cols[i]:
