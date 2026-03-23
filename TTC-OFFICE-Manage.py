@@ -264,34 +264,37 @@ div[data-testid="metric-container"] {
 
 button[kind="primary"] { font-weight: 700; }
 
-/* ── Tabs — ทุกหน้า ── */
+/* ── Tabs — Pill style ทุกหน้า ── */
 div[data-testid="stTabs"] > div:first-child {
-    background: #eaf2ee;
-    border-radius: 10px;
-    padding: 4px;
+    background: #f0f4f1;
+    border-radius: 12px;
+    padding: 5px;
+    gap: 6px;
 }
 div[data-testid="stTabs"] div[role="tablist"] {
     border-bottom: none !important;
-    gap: 4px;
+    gap: 6px !important;
 }
 div[data-testid="stTabs"] button[role="tab"] {
     border-radius: 8px !important;
     font-size: 0.92rem !important;
     font-weight: 600 !important;
-    padding: 8px 14px !important;
-    color: #52796F !important;
-    background: transparent !important;
-    border: none !important;
+    padding: 9px 14px !important;
+    color: #1b4332 !important;
+    background: white !important;
+    border: 1.5px solid #c8e0d4 !important;
     transition: all 0.15s ease !important;
 }
 div[data-testid="stTabs"] button[role="tab"]:hover {
-    background: white !important;
+    background: #eaf2ee !important;
+    border-color: #2D6A4F !important;
     color: #1b4332 !important;
 }
 div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-    background: #C0392B !important;
+    background: #1b4332 !important;
     color: white !important;
-    box-shadow: 0 2px 8px rgba(192,57,43,0.30) !important;
+    border-color: #1b4332 !important;
+    box-shadow: 0 2px 8px rgba(27,67,50,0.30) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1203,45 +1206,24 @@ def page_request():
                 st.rerun()
         return   # หยุด render ส่วนที่เหลือของหน้า
 
-    # CSS: Tab ชัดเจนขึ้น
     st.markdown("""
     <style>
-    /* Tab bar background */
     div[data-testid="stTabs"] > div:first-child {
-        background: #eaf2ee;
-        border-radius: 10px;
-        padding: 4px;
-        gap: 4px;
+        background: #f0f4f1; border-radius: 12px; padding: 5px; gap: 6px;
     }
-    /* Tab ทั่วไป */
+    div[data-testid="stTabs"] div[role="tablist"] { border-bottom: none !important; gap: 6px !important; }
     div[data-testid="stTabs"] button[role="tab"] {
-        border-radius: 8px !important;
-        font-size: 0.95rem !important;
-        font-weight: 600 !important;
-        padding: 8px 16px !important;
-        color: #52796F !important;
-        background: transparent !important;
-        border: none !important;
+        border-radius: 8px !important; font-size: 0.92rem !important; font-weight: 600 !important;
+        padding: 9px 14px !important; color: #1b4332 !important;
+        background: white !important; border: 1.5px solid #c8e0d4 !important;
         transition: all 0.15s ease !important;
     }
-    /* Tab hover */
     div[data-testid="stTabs"] button[role="tab"]:hover {
-        background: white !important;
-        color: #1b4332 !important;
+        background: #eaf2ee !important; border-color: #2D6A4F !important; color: #1b4332 !important;
     }
-    /* Tab active */
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-        background: #C0392B !important;
-        color: white !important;
-        box-shadow: 0 2px 8px rgba(192,57,43,0.30) !important;
-    }
-    /* ซ่อน underline เดิมของ Streamlit */
-    div[data-testid="stTabs"] button[role="tab"] div[data-testid="stMarkdownContainer"] p {
-        font-size: 0.95rem !important;
-    }
-    div[data-testid="stTabs"] div[role="tablist"] {
-        border-bottom: none !important;
-        gap: 4px !important;
+        background: #1b4332 !important; color: white !important;
+        border-color: #1b4332 !important; box-shadow: 0 2px 8px rgba(27,67,50,0.30) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1258,8 +1240,10 @@ def page_request():
         render_step_bar(st.session_state.con_step, ["เลือกอุปกรณ์", "ข้อมูลผู้เบิก", "ยืนยัน"])
 
         st.markdown(
-            '<div class="info-box">🖊️ อุปกรณ์ <b>สำนักงาน</b> และ <b>ทั่วไป</b> — '
-            'ใช้แล้วหมดไป <b>ไม่ต้องคืน</b></div>',
+            '<div style="background:#eaf4fb;border:1.5px solid #aed6f1;border-left:5px solid #2980b9;'
+            'border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.9rem;color:#1a5276;">'
+            'ℹ️ อุปกรณ์ <b>สำนักงาน</b> และ <b>ทั่วไป</b> — '
+            'ใช้แล้วหมดไป <b style="color:#2980b9;">ไม่ต้องคืน</b></div>',
             unsafe_allow_html=True)
 
         df_con_sup = query_table("supplies",
