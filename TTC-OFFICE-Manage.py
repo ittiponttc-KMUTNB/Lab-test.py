@@ -1070,6 +1070,11 @@ def render_step_bar(current_step: int, steps: list):
 def page_request():
     st.markdown('<div class="page-title">📋 เบิกอุปกรณ์</div>', unsafe_allow_html=True)
 
+    # แสดง balloons หลัง rerun (flag จาก submit สำเร็จ)
+    if st.session_state.pop("show_balloons", False):
+        st.success("✅ บันทึกรายการสำเร็จ!")
+        st.balloons()
+
     # CSS: Tab ชัดเจนขึ้น
     st.markdown("""
     <style>
@@ -1242,9 +1247,9 @@ def page_request():
                                         f"👤 **{req_name}** เบิก {eq_final['name']} "
                                         f"จำนวน {sel_qty} {eq_final.get('unit','ชิ้น')}"
                                     )
-                                    st.balloons()
-                                    # reset step
+                                    # reset step + flag balloons
                                     st.session_state.con_step = 1
+                                    st.session_state["show_balloons"] = True
                                     for k in ["con_selected_id","con_selected_label","con_selected_qty"]:
                                         st.session_state.pop(k, None)
                                     st.rerun()
@@ -1401,9 +1406,9 @@ def page_request():
                                         f"👤 **{bor_name}** ยืม {eq_final_b['name']} x{sel_qty_b}\n"
                                         f"📅 กำหนดคืน: {due_date}"
                                     )
-                                    st.balloons()
-                                    # reset step
+                                    # reset step + flag balloons
                                     st.session_state.bor_step = 1
+                                    st.session_state["show_balloons"] = True
                                     for k in ["bor_selected_id","bor_selected_qty"]:
                                         st.session_state.pop(k, None)
                                     st.rerun()
