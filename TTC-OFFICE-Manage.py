@@ -169,34 +169,8 @@ div[data-testid="metric-container"] {
 .quick-btn .btn-label { font-size: 1rem; font-weight: 700; color: #1b4332; }
 .quick-btn .btn-sub   { font-size: 0.75rem; color: #52796F; margin-top: 2px; }
 
-/* ── Bottom navigation bar (mobile) ── */
-.bottom-nav {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: white; border-top: 1px solid #d8e8e0;
-    display: flex; z-index: 999;
-    box-shadow: 0 -3px 12px rgba(27,67,50,0.10);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-.bottom-nav a {
-    flex: 1; display: flex; flex-direction: column; align-items: center;
-    padding: 8px 4px 6px; font-size: 0.65rem; color: #6c757d;
-    text-decoration: none; font-family: 'Sarabun', sans-serif;
-    border-top: 3px solid transparent; transition: all 0.15s;
-}
-.bottom-nav a .bnav-icon { font-size: 1.45rem; line-height: 1; margin-bottom: 2px; }
-.bottom-nav a.active { color: #1b4332; border-top-color: #2D6A4F; font-weight: 700; }
-.bottom-nav a:hover  { color: #2D6A4F; }
-
-/* ── Content padding เพื่อไม่ให้ bottom nav บัง ── */
-.main-content-pad { padding-bottom: 80px; }
-
-/* ── ซ่อนปุ่ม Streamlit จริงใต้ bottom nav ── */
-div[data-testid="stBottom"],
-div[data-testid="stBottom"] ~ div { display: none !important; }
-
-/* ── ซ่อนปุ่ม nav จริงใน sidebar ── */
-section[data-testid="stSidebar"] div[style*="display:none"] { display: none !important; }
-section[data-testid="stSidebar"] div[style*="display:none"] ~ div.stButton { display: none !important; }
+/* ── Content padding ── */
+.main-content-pad { padding-bottom: 16px; }
 
 /* ── ซ่อน expander border-left ที่เป็นเส้นแดง ── */
 div[data-testid="stExpander"],
@@ -570,74 +544,48 @@ def render_header():
     st.markdown(role_badge, unsafe_allow_html=True)
 
 
-def render_bottom_nav():
-    """Bottom navigation bar — แสดงเฉพาะเมนูที่เหมาะกับ role"""
+def render_top_nav():
+    """Navigation ปุ่มแถวบน — ใต้ header เสมอ ใช้ Streamlit button จริง"""
     page = st.session_state.get("page", "หน้าหลัก")
 
     if is_admin():
-        # นับรายการรอตรวจสอบ เพื่อแสดง badge
         try:
             df_pend = query_table("borrow_transactions", select="id",
                                   filters=[("status","eq","รอตรวจสอบ")])
             n_pending = len(df_pend)
         except Exception:
             n_pending = 0
-
         pending_badge = f" ({n_pending})" if n_pending > 0 else ""
 
-        # Admin — จัดลำดับตามความถี่ใช้งาน
         nav_items = [
-            ("หน้าหลัก",   "🏠",  "หน้าหลัก"),
-            ("เบิกอุปกรณ์","📋",  "เบิก"),
-            ("คืนอุปกรณ์", "🔍",  f"ตรวจสอบ{pending_badge}"),
-            ("Dashboard",  "📊",  "ภาพรวม"),
-            ("คลังอุปกรณ์","📦",  "คลัง"),
+            ("หน้าหลัก",    "🏠", "หน้าหลัก"),
+            ("เบิกอุปกรณ์", "📋", "เบิก"),
+            ("คืนอุปกรณ์",  "🔍", f"ตรวจสอบ{pending_badge}"),
+            ("Dashboard",   "📊", "ภาพรวม"),
+            ("คลังอุปกรณ์", "📦", "คลัง"),
         ]
     else:
-        # ผู้ใช้ทั่วไป — เห็นแค่ 3 เมนูหลัก
         nav_items = [
-            ("หน้าหลัก",   "🏠", "หน้าหลัก"),
-            ("เบิกอุปกรณ์","📋", "เบิก"),
-            ("คืนอุปกรณ์", "↩️", "คืน"),
+            ("หน้าหลัก",    "🏠", "หน้าหลัก"),
+            ("เบิกอุปกรณ์", "📋", "เบิก"),
+            ("คืนอุปกรณ์",  "↩️", "คืน"),
         ]
 
-    # CSS badge สีแดงบน bottom nav
-    st.markdown("""
-    <style>
-    .bnav-badge {
-        display: inline-block;
-        background: #C0392B; color: white;
-        border-radius: 10px; font-size: 0.6rem;
-        padding: 1px 5px; font-weight: 700;
-        margin-left: 2px; vertical-align: top;
-        line-height: 1.4;
-    }
-    /* ปุ่ม bottom nav จริง — ซ่อนใต้แถบ */
-    div[data-testid="stBottom"] { display: none !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    links_html = ""
-    for pname, icon, label in nav_items:
-        active_cls = "active" if page == pname else ""
-        links_html += (
-            f'<a class="{active_cls}" onclick="void(0)" style="cursor:pointer;">'
-            f'<span class="bnav-icon">{icon}</span>{label}</a>'
-        )
-
-    st.markdown(
-        f'<div class="bottom-nav">{links_html}</div>',
-        unsafe_allow_html=True
-    )
-
-    # ปุ่มจริง Streamlit — ซ่อนใน sidebar ไม่โผล่ใน main content
-    with st.sidebar:
-        st.markdown('<div style="display:none;">', unsafe_allow_html=True)
-        for pname, icon, label in nav_items:
-            if st.button(f"{icon} {label}", key=f"bnav_{pname}"):
+    cols = st.columns(len(nav_items))
+    for i, (pname, icon, label) in enumerate(nav_items):
+        with cols[i]:
+            is_active = page == pname
+            if st.button(
+                f"{icon}\n{label}",
+                key=f"tnav_{pname}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary"
+            ):
                 st.session_state.page = pname
                 st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+
 
 
 def nav():
@@ -662,6 +610,7 @@ def nav():
                 st.caption("⏳ กำลังโหลด...")
 
     render_header()
+    render_top_nav()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: หน้าหลัก (Quick Actions — ผู้ใช้ทั่วไป)
@@ -2398,7 +2347,6 @@ def main():
     elif page == "ตั้งค่า":     page_settings()
 
     footer()
-    render_bottom_nav()  # Bottom nav ต้อง render หลังสุด
 
 if __name__ == "__main__":
     main()
