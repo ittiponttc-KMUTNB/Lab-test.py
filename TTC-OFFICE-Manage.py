@@ -407,7 +407,7 @@ def load_sidebar_stats():
 
 def clear_all_cache():
     """เรียกหลังทุก write operation — clear cache ทั้งหมดที่เกี่ยวข้อง"""
-    clear_all_cache()
+    load_sidebar_stats.clear()
     load_active_borrows.clear()
     load_pending_borrows.clear()
 
