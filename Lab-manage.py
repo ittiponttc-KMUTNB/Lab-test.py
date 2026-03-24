@@ -3,6 +3,8 @@ import pandas as pd
 import json
 import time
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
+_TZ_BKK = ZoneInfo("Asia/Bangkok")
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -12,7 +14,7 @@ import cloudinary.uploader
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ระบบเบิก-คืนอุปกรณ์ TTC",
+    page_title="ระบบอุปกรณ์ Lab TTC",
     page_icon="🔬",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -56,54 +58,185 @@ def get_supabase():
 
 sb = get_supabase()
 
-# ─── MOBILE CSS ───────────────────────────────────────────────────────────────
+# ─── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-html, body, [class*="css"] { font-size: 16px; }
-div.stButton > button { height: 3rem; font-size: 1rem; border-radius: 10px; }
-input, textarea { font-size: 16px !important; min-height: 2.8rem !important; }
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Sarabun', sans-serif;
+    font-size: 16px;
+    background-color: #ffffff;
+}
+[data-testid="collapsedControl"] { display: none; }
+div.stButton > button {
+    height: 3rem; font-size: 1rem; border-radius: 10px;
+    font-family: 'Sarabun', sans-serif; font-weight: 600;
+}
+input, textarea { font-size: 16px !important; }
 div[data-baseweb="select"] { font-size: 16px; }
 
-div[data-testid="metric-container"] {
-    background: #f8f9fa; border-radius: 12px;
-    padding: 12px; border: 1px solid #e0e0e0;
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div {
+    background-color: white !important;
+    border: 1.5px solid #e8c4bc !important;
+    border-radius: 8px !important;
 }
+div[data-baseweb="select"] > div:hover,
+div[data-baseweb="input"] > div:hover { border-color: #7d3020 !important; }
+
+div[data-testid="metric-container"] {
+    background: white; border-radius: 12px;
+    padding: 14px; border: 1px solid #e8c4bc;
+    box-shadow: 0 2px 8px rgba(92,32,24,0.07);
+}
+
+/* App Header */
+.app-header {
+    background: linear-gradient(135deg, #5c2018 0%, #7d3020 100%);
+    border-radius: 14px; padding: 16px 18px 12px 18px;
+    margin-bottom: 12px; color: white;
+    display: flex; align-items: center; gap: 12px;
+}
+.app-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: white; }
+.app-header p  { margin: 0; font-size: 0.78rem; color: #f0c4bc; }
+
+/* Role badge */
+.role-badge { display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;
+    margin-bottom: 12px; }
+.role-user  { background: #fdf2f0; color: #5c2018; border: 1px solid #e8c4bc; }
+.role-admin { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+
+/* Section header */
+.section-header {
+    font-size: 1rem; font-weight: 700; color: #5c2018;
+    margin: 16px 0 8px 0; padding: 6px 10px;
+    background: #fdf2f0; border-left: 4px solid #7d3020;
+    border-radius: 0 6px 6px 0;
+}
+
+/* Page title */
+.page-title {
+    font-size: 1.3rem; font-weight: 700; color: #5c2018;
+    margin: 0 0 14px 0; padding-bottom: 8px;
+    border-bottom: 3px solid #7d3020;
+}
+
+/* Cards */
 .eq-card {
-    background: white; border-radius: 12px; padding: 14px;
-    margin-bottom: 10px; border: 1px solid #e0e0e0;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06); line-height: 1.7;
+    background: white; border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 10px; border: 1px solid #e8c4bc;
+    box-shadow: 0 2px 6px rgba(92,32,24,0.06); line-height: 1.7;
 }
 .overdue-alert {
     background: #fff3cd; border-left: 4px solid #ff6b6b;
-    border-radius: 8px; padding: 10px 14px; margin: 6px 0; line-height: 1.7;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 6px 0; line-height: 1.7;
 }
-.section-header {
-    font-size: 1.05rem; font-weight: 700; color: #1F4E79;
-    margin: 16px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #e0e0e0;
+
+/* Info box */
+.info-box {
+    background: #fdf2f0; border: 1px solid #e8c4bc;
+    border-radius: 8px; padding: 10px 14px; margin: 8px 0;
+    font-size: 0.88rem; color: #5c2018;
 }
+
+/* Badge */
 .badge {
     display: inline-block; padding: 2px 10px; border-radius: 20px;
     font-size: 0.78rem; font-weight: 600; color: white;
 }
+
+/* Tabs — Pill style */
+div[data-testid="stTabs"] > div:first-child {
+    background: #fdf2f0; border-radius: 12px; padding: 5px; gap: 6px;
+}
+div[data-testid="stTabs"] div[role="tablist"] { border-bottom: none !important; gap: 6px !important; }
+div[data-testid="stTabs"] button[role="tab"] {
+    border-radius: 8px !important; font-size: 0.92rem !important; font-weight: 600 !important;
+    padding: 9px 14px !important; color: #5c2018 !important;
+    background: white !important; border: 1.5px solid #e8c4bc !important;
+    transition: all 0.15s ease !important;
+}
+div[data-testid="stTabs"] button[role="tab"]:hover {
+    background: #fdf2f0 !important; border-color: #7d3020 !important;
+}
+div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    background: #7d3020 !important; color: white !important;
+    border-color: #7d3020 !important; box-shadow: 0 2px 8px rgba(125,48,32,0.30) !important;
+}
+
+/* Quick action buttons */
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"],
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"] {
+    height: 130px !important; border-radius: 14px !important;
+    font-size: 1rem !important; font-weight: 700 !important;
+    white-space: pre-line !important; line-height: 1.6 !important;
+    padding: 16px 12px !important; border: 2px solid #e8c4bc !important;
+    background: white !important; color: #5c2018 !important;
+    box-shadow: 0 3px 10px rgba(92,32,24,0.08) !important;
+    transition: all 0.18s ease !important;
+}
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:hover,
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:hover {
+    border-color: #7d3020 !important; color: #5c2018 !important;
+    box-shadow: 0 6px 20px rgba(92,32,24,0.18) !important;
+    transform: translateY(-3px) !important; background: #fdf2f0 !important;
+}
+
+/* Step wizard */
+.step-bar { display: flex; align-items: center; margin-bottom: 16px; gap: 0; }
+.step-item { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.step-circle {
+    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 700; border: 2px solid #e8c4bc;
+    background: white; color: #aaa;
+}
+.step-circle.done   { background: #7d3020; border-color: #7d3020; color: white; }
+.step-circle.active { background: #5c2018; border-color: #5c2018; color: white; }
+.step-label { font-size: 0.7rem; color: #888; margin-top: 3px; }
+.step-label.active { color: #5c2018; font-weight: 700; }
+.step-line { flex: 1; height: 2px; background: #e8c4bc; }
+.step-line.done { background: #7d3020; }
+
+/* Admin sidebar */
+.admin-panel-title {
+    font-size: 0.85rem; font-weight: 700; color: #856404;
+    padding: 6px 0; border-bottom: 1px solid #ffc107; margin-bottom: 8px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── ADMIN AUTH ───────────────────────────────────────────────────────────────
+# ─── ADMIN AUTH ─────────────────────────────────────────────────────────────
 def is_admin():
     return st.session_state.get("is_admin", False)
 
 def admin_login_widget():
     if is_admin():
-        st.sidebar.success("🔓 Admin Mode")
+        st.sidebar.markdown('<div class="admin-panel-title">🔓 Admin Mode เปิดอยู่</div>', unsafe_allow_html=True)
         if st.sidebar.button("🔒 ออกจาก Admin", use_container_width=True):
             st.session_state.is_admin = False
             st.rerun()
+        st.sidebar.markdown("---")
+        admin_pages = [
+            ("Dashboard","🏠","ภาพรวม"), ("อุปกรณ์","📦","จัดการ"),
+            ("คืน","✅","ตรวจสอบ"), ("รายงาน","📋","รายงาน"), ("ตั้งค่า","⚙️","ตั้งค่า"),
+        ]
+        for pname, icon, label in admin_pages:
+            active = st.session_state.get("page") == pname
+            if st.sidebar.button(f"{icon} {label}", key=f"sidebar_nav_{pname}",
+                                  use_container_width=True,
+                                  type="primary" if active else "secondary"):
+                st.session_state.page = pname
+                st.rerun()
     else:
-        with st.sidebar.expander("🔒 Admin Login"):
-            pwd = st.text_input("รหัสผ่าน", type="password", key="admin_pwd_input")
-            if st.button("เข้าสู่ระบบ Admin", use_container_width=True):
+        with st.sidebar.expander("🔒 Admin Login", expanded=False):
+            pwd = st.text_input("รหัสผ่าน Admin", type="password", key="admin_pwd_input")
+            if st.button("เข้าสู่ระบบ", use_container_width=True, key="admin_login_btn"):
                 if pwd == ADMIN_PASSWORD:
                     st.session_state.is_admin = True
+                    st.session_state.page = "Dashboard"
                     st.rerun()
                 else:
                     st.error("รหัสผ่านไม่ถูกต้อง")
@@ -164,6 +297,13 @@ def delete_rows(table, match_col=None, match_val=None, delete_all=False):
         return resp.data
     return _sb_retry(_do)
 
+
+def clear_all_cache():
+    """Clear cache ทั้งหมดหลัง write operation"""
+    load_sidebar_stats.clear()
+    load_active_transactions_enriched.clear()
+    load_pending_transactions_enriched.clear()
+
 def batch_reset_equipment():
     """รีเซ็ตทุกอุปกรณ์ — ดึงมาแล้ว update เฉพาะตัวที่ต้องเปลี่ยน [FIX #4]"""
     df = query_table("equipment", select="id,total_qty,available_qty,status")
@@ -178,7 +318,7 @@ def batch_reset_equipment():
 # ═════════════════════════════════════════════════════════════════════════════
 # DATA LOADING — Batch fetch + merge (eliminates N+1)            [FIX #1, #6]
 # ═════════════════════════════════════════════════════════════════════════════
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_sidebar_stats():
     """Cache sidebar stats 30 วินาที"""
     df_eq = query_table("equipment", select="id,available_qty,is_consumable,min_qty")
@@ -200,6 +340,7 @@ def load_sidebar_stats():
 
     return n_eq, avail, n_borr, n_over, n_low
 
+@st.cache_data(ttl=10, show_spinner=False)
 def load_active_transactions_enriched():
     """[FIX #1] ดึง transactions + equipment + borrowers ทีเดียว แล้ว merge"""
     df_tx = query_table("transactions",
@@ -210,6 +351,7 @@ def load_active_transactions_enriched():
         return pd.DataFrame()
     return _enrich_transactions(df_tx)
 
+@st.cache_data(ttl=10, show_spinner=False)
 def load_pending_transactions_enriched():
     """[FIX #1] ดึง transactions รอตรวจสอบ + merge"""
     df_tx = query_table("transactions",
@@ -391,66 +533,161 @@ def overdue_days(due_str):
 # ═════════════════════════════════════════════════════════════════════════════
 # NAVIGATION + HEADER                                           [FIX #3, #9]
 # ═════════════════════════════════════════════════════════════════════════════
-PAGES = [("🏠","Dashboard"), ("📦","อุปกรณ์"), ("➕","เบิก"), ("✅","คืน"), ("📋","รายงาน"), ("⚙️","ตั้งค่า")]
+# ═════════════════════════════════════════════════════════════════════════════
+# NAVIGATION + HEADER
+# ═════════════════════════════════════════════════════════════════════════════
+def render_header():
+    logo_html = ""
+    if LOGO_URL:
+        logo_opt = optimized_url(LOGO_URL, 100, 100, "fit") if "cloudinary" in LOGO_URL else LOGO_URL
+        logo_html = f'<img src="{logo_opt}" style="width:72px;height:auto;border-radius:10px;" loading="lazy">'
+    else:
+        logo_html = '<span style="font-size:3rem;">🔬</span>'
+
+    role_badge = (
+        '<span class="role-badge role-admin">🔑 Admin Mode</span>'
+        if is_admin() else
+        '<span class="role-badge role-user">👤 ผู้ใช้ทั่วไป</span>'
+    )
+    st.markdown(
+        f'<div class="app-header">'
+        f'<div style="min-width:80px;">{logo_html}</div>'
+        f'<div><h2>ระบบอุปกรณ์ Lab TTC</h2>'
+        f'<p>ภาควิชาครุศาสตร์โยธา — มจพ.</p></div></div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(role_badge, unsafe_allow_html=True)
+
+
+def render_top_nav():
+    page = st.session_state.get("page", "หน้าหลัก")
+
+    if is_admin():
+        try:
+            df_pend = query_table("transactions", select="id", filters=[("status","eq","รอตรวจสอบ")])
+            n_p = len(df_pend)
+        except Exception:
+            n_p = 0
+        badge_p = f" ({n_p})" if n_p > 0 else ""
+
+        nav_items = [
+            ("หน้าหลัก", "🏠", "หน้าหลัก"),
+            ("เบิก",      "➕", "เบิก"),
+            ("คืน",       "✅", f"ตรวจสอบ{badge_p}"),
+            ("Dashboard", "📊", "ภาพรวม"),
+            ("อุปกรณ์",   "📦", "คลัง"),
+        ]
+    else:
+        if page != "หน้าหลัก":
+            if st.button("🏠 หน้าหลัก", key="tnav_home_user", use_container_width=False):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+        return
+
+    cols = st.columns(len(nav_items))
+    for i, (pname, icon, label) in enumerate(nav_items):
+        with cols[i]:
+            if st.button(f"{icon}\n{label}", key=f"tnav_{pname}",
+                         use_container_width=True,
+                         type="primary" if page == pname else "secondary"):
+                st.session_state.page = pname
+                st.rerun()
+    st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+
 
 def nav():
     if "page" not in st.session_state:
-        st.session_state.page = "Dashboard"
+        st.session_state.page = "หน้าหลัก"
 
-    # Sidebar — Admin Login + สรุปข้อมูล
     with st.sidebar:
         st.markdown("## 🔬 ระบบอุปกรณ์ Lab")
-        st.markdown("---")
         admin_login_widget()
+        if is_admin():
+            st.markdown("---")
+            try:
+                n_eq, avail, n_borr, n_over, n_low = load_sidebar_stats()
+                st.metric("📦 อุปกรณ์", n_eq)
+                c1, c2 = st.columns(2)
+                c1.metric("✅ พร้อมใช้", avail)
+                c2.metric("🔄 ยืมอยู่", n_borr)
+                if n_over > 0:
+                    st.error(f"⚠️ เกินกำหนด {n_over} รายการ")
+                if n_low > 0:
+                    st.warning(f"📦 ใกล้หมด {n_low} รายการ")
+            except Exception:
+                st.caption("⏳ กำลังโหลด...")
+
+    render_header()
+    render_top_nav()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PAGE: หน้าหลัก
+# ═════════════════════════════════════════════════════════════════════════════
+def page_home():
+    try:
+        n_eq, avail, n_borr, n_over, n_low = load_sidebar_stats()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("📦 อุปกรณ์", n_eq)
+        c2.metric("✅ พร้อมใช้", avail)
+        c3.metric("🔄 ยืมอยู่", n_borr)
+        if n_over > 0:
+            st.error(f"⚠️ มีอุปกรณ์เกินกำหนดคืน {n_over} รายการ!")
+        if n_low > 0:
+            st.warning(f"📦 วัสดุสิ้นเปลืองใกล้หมด {n_low} รายการ!")
+    except Exception:
+        st.warning("⏳ กำลังโหลดข้อมูล...")
+
+    st.markdown("---")
+    st.markdown('<div class="section-header">🚀 ทำรายการ</div>', unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("➕\nเบิกอุปกรณ์\nอุปกรณ์ / วัสดุสิ้นเปลือง",
+                     key="home_to_borrow", use_container_width=True):
+            st.session_state.page = "เบิก"
+            st.rerun()
+    with col_b:
+        if st.button("✅\nคืนอุปกรณ์\nแจ้งนำอุปกรณ์มาคืน",
+                     key="home_to_return", use_container_width=True):
+            st.session_state.page = "คืน"
+            st.rerun()
+
+    if not is_admin():
+        st.markdown("""
+        <div class="info-box" style="margin-top:16px;">
+        📌 <b>คำแนะนำการใช้งาน</b><br>
+        • <b>เบิกอุปกรณ์</b> — เลือกอุปกรณ์ กรอกชื่อ กดยืนยัน<br>
+        • <b>คืนอุปกรณ์</b> — ค้นหารายการที่ยืม กดแจ้งคืน รอ Admin ตรวจสอบ<br>
+        • สอบถามเพิ่มเติมติดต่อ <b>เจ้าหน้าที่ห้อง Lab</b>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(
+            '<div style="text-align:center;color:#888;font-size:0.8rem;margin-top:12px;">' +
+            '🔒 Admin Login ที่เมนู ☰ มุมซ้ายบน</div>',
+            unsafe_allow_html=True)
+    else:
         st.markdown("---")
-        try:
-            n_eq, avail, n_borr, n_over, n_low = load_sidebar_stats()
-            st.metric("📦 อุปกรณ์", n_eq)
-            st.metric("🔄 กำลังยืม", n_borr)
-            if n_over > 0:
-                st.error(f"⚠️ เกินกำหนด {n_over} รายการ")
-            if n_low > 0:
-                st.warning(f"📦 วัสดุใกล้หมด {n_low} รายการ")
-        except Exception:
-            st.caption("⏳ กำลังโหลด...")
-
-    # ── [FIX #9] Header พร้อมโลโก้ TTC ─────────────────────────────────────
-    logo_html = ""
-    if LOGO_URL:
-        logo_opt = optimized_url(LOGO_URL, 140, 140, crop="fit") if "cloudinary" in LOGO_URL else LOGO_URL
-        logo_html = f'<img src="{logo_opt}" style="width:70px;height:auto;margin-bottom:4px;" loading="lazy"><br>'
-
-    st.markdown(
-        f'<div style="text-align:center; margin-bottom:10px;">'
-        f'{logo_html}'
-        f'<span style="font-size:1.05rem; font-weight:700; color:#1F4E79; white-space:nowrap;">'
-        f'ระบบบริหารจัดการห้องปฏิบัติการ TTC</span><br>'
-        f'<span style="font-size:0.82rem; color:#888;">'
-        f'ภาควิชาครุศาสตร์โยธา — มจพ.</span></div>',
-        unsafe_allow_html=True
-    )
-
-    # ── Top nav bar ────────────────────────────────────────────────────────
-    NAV_ITEMS = [
-        ("Dashboard", "🏠", "หน้าหลัก"), ("อุปกรณ์", "📦", "อุปกรณ์"),
-        ("เบิก", "➕", "เบิก"), ("คืน", "✅", "คืน"),
-        ("รายงาน", "📋", "รายงาน"), ("ตั้งค่า", "⚙️", "ตั้งค่า"),
-    ]
-    cols = st.columns(len(NAV_ITEMS))
-    for i, (name, icon, label) in enumerate(NAV_ITEMS):
-        active = st.session_state.page == name
-        with cols[i]:
-            if st.button(f"{icon}\n{label}", key=f"tnav_{name}",
-                         type="primary" if active else "secondary",
-                         use_container_width=True):
-                st.session_state.page = name
+        st.markdown('<div class="section-header">⚡ Admin Shortcuts</div>', unsafe_allow_html=True)
+        cx, cy, cz = st.columns(3)
+        with cx:
+            if st.button("📊 ภาพรวม", use_container_width=True, key="home_dash"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
+        with cy:
+            if st.button("✅ ตรวจสอบการคืน", use_container_width=True, key="home_ret"):
+                st.session_state.page = "คืน"
+                st.rerun()
+        with cz:
+            if st.button("📦 จัดการอุปกรณ์", use_container_width=True, key="home_eq"):
+                st.session_state.page = "อุปกรณ์"
                 st.rerun()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: DASHBOARD                                               [FIX #1, #6]
 # ═════════════════════════════════════════════════════════════════════════════
 def page_dashboard():
-    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">🏠 ภาพรวม</p>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">🏠 ภาพรวมระบบ Lab</div>', unsafe_allow_html=True)
 
     # Stats — ใช้ cached sidebar stats
     try:
@@ -521,7 +758,7 @@ def page_dashboard():
 # PAGE: EQUIPMENT                                               [FIX #1, #2]
 # ═════════════════════════════════════════════════════════════════════════════
 def page_equipment():
-    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">📦 รายการอุปกรณ์</p>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">📦 รายการอุปกรณ์ Lab</div>', unsafe_allow_html=True)
 
     search = st.text_input("🔍 ค้นหา ชื่อ / รหัส / หมวดหมู่", placeholder="พิมพ์เพื่อค้นหา...")
 
@@ -596,7 +833,7 @@ def page_equipment():
                         else:
                             delete_rows("equipment", "id", r["id"])
                             st.success("ลบแล้ว")
-                            load_sidebar_stats.clear()
+                            clear_all_cache()
                             st.rerun()
 
     # ── Admin: เพิ่ม/แก้ไขอุปกรณ์ ──────────────────────────────────────────
@@ -718,7 +955,7 @@ def page_equipment():
                                 msg += f" (ลดจำนวน {diff} พร้อมใช้: {new_available})"
                             st.success(msg)
                             st.session_state["_next_sel"] = f"{sv_code} — {sv_name}"
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
@@ -729,7 +966,7 @@ def page_equipment():
 # PAGE: BORROW                                                  [FIX #2, #8]
 # ═════════════════════════════════════════════════════════════════════════════
 def page_borrow():
-    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">➕ เบิกอุปกรณ์</p>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">➕ เบิกอุปกรณ์</div>', unsafe_allow_html=True)
 
     avail = query_table("equipment",
                         select="id,code,name,category,available_qty,image_url,description,is_consumable",
@@ -842,7 +1079,7 @@ def page_borrow():
                 })
                 new_avail = int(eq_row["available_qty"]) - qty
                 update_rows("equipment", {"available_qty": new_avail}, "id", eq_id)
-                load_sidebar_stats.clear()
+                clear_all_cache()
 
                 if is_consumable:
                     st.success(
@@ -865,7 +1102,7 @@ def page_borrow():
 # PAGE: RETURN                                                  [FIX #1, #2]
 # ═════════════════════════════════════════════════════════════════════════════
 def page_return():
-    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">✅ คืนอุปกรณ์</p>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">✅ คืนอุปกรณ์</div>', unsafe_allow_html=True)
 
     # นับจำนวนรอตรวจสอบ
     df_pending = load_pending_transactions_enriched()
@@ -926,7 +1163,7 @@ def page_return():
                             "note": return_note or None, "status": "รอตรวจสอบ"
                         }, "id", r["id"])
                         st.success("📬 แจ้งคืนเรียบร้อยแล้ว! กรุณารอ Admin ตรวจสอบและยืนยัน")
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
 
     # ── TAB 2: Admin ตรวจสอบ ─────────────────────────────────────────────
@@ -998,7 +1235,7 @@ def page_return():
                                         "status": new_status
                                     }, "id", r["equipment_id"])
 
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.success(f"✅ ยืนยันรับคืนแล้ว สภาพ: {admin_condition}")
                                 st.rerun()
                         with col_rej:
@@ -1007,7 +1244,7 @@ def page_return():
                                 update_rows("transactions", {
                                     "status": "ยืมอยู่", "return_date": None, "condition_in": None
                                 }, "id", r["id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.warning("↩️ ส่งกลับเป็นสถานะ ยืมอยู่ แล้ว")
                                 st.rerun()
                     else:
@@ -1017,7 +1254,7 @@ def page_return():
 # PAGE: REPORT                                                  [FIX #1]
 # ═════════════════════════════════════════════════════════════════════════════
 def page_report():
-    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">📋 รายงาน</p>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">📋 รายงาน</div>', unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs(["ประวัติการเบิก-คืน", "สรุปอุปกรณ์"])
 
@@ -1062,7 +1299,7 @@ def export_excel(df, sheet_name):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = sheet_name
-    hfill  = PatternFill("solid", fgColor="1F4E79")
+    hfill  = PatternFill("solid", fgColor="5c2018")
     hfont  = Font(color="FFFFFF", bold=True, size=11)
     border = Border(left=Side(style="thin"), right=Side(style="thin"),
                     top=Side(style="thin"),  bottom=Side(style="thin"))
@@ -1071,7 +1308,7 @@ def export_excel(df, sheet_name):
         cell.fill, cell.font, cell.border = hfill, hfont, border
         cell.alignment = Alignment(horizontal="center", vertical="center")
     for ri, row in enumerate(df.itertuples(index=False), 2):
-        fill = PatternFill("solid", fgColor="EBF3FB" if ri % 2 == 0 else "FFFFFF")
+        fill = PatternFill("solid", fgColor="FDF2F0" if ri % 2 == 0 else "FFFFFF")
         for ci, val in enumerate(row, 1):
             cell = ws.cell(row=ri, column=ci, value=val)
             cell.border, cell.fill = border, fill
@@ -1087,7 +1324,7 @@ def export_excel(df, sheet_name):
 # PAGE: SETTINGS                                                [FIX #4, #7]
 # ═════════════════════════════════════════════════════════════════════════════
 def page_settings():
-    st.markdown('<p style="font-size:1.3rem;font-weight:700;color:#1F4E79;margin:4px 0 12px 0;">⚙️ ตั้งค่าระบบ</p>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">⚙️ ตั้งค่าระบบ</div>', unsafe_allow_html=True)
 
     if not is_admin():
         st.warning("🔒 หน้านี้สำหรับ Admin เท่านั้น กรุณา Login ที่ Sidebar")
@@ -1191,7 +1428,7 @@ def page_settings():
                             except Exception:
                                 pass
 
-                    load_sidebar_stats.clear()
+                    clear_all_cache()
                     st.success("✅ นำเข้าข้อมูลสำเร็จ!")
                     st.rerun()
 
@@ -1244,7 +1481,7 @@ def page_settings():
                             delete_rows("equipment", delete_all=True)
                             st.success("✅ ล้างข้อมูลทั้งหมดเรียบร้อย เริ่มระบบใหม่ได้เลย")
 
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
@@ -1265,14 +1502,33 @@ def footer():
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     nav()
-    page = st.session_state.get("page", "Dashboard")
-    if   page == "Dashboard": page_dashboard()
-    elif page == "อุปกรณ์":   page_equipment()
+    page = st.session_state.get("page", "หน้าหลัก")
+
+    ADMIN_ONLY = {"Dashboard", "อุปกรณ์", "รายงาน", "ตั้งค่า"}
+    if page in ADMIN_ONLY and not is_admin():
+        st.warning("🔒 หน้านี้สำหรับ Admin เท่านั้น กรุณา Login ที่เมนู ☰ มุมซ้ายบน")
+        st.session_state.page = "หน้าหลัก"
+        st.rerun()
+
+    if   page == "หน้าหลัก": page_home()
+    elif page == "Dashboard": page_dashboard()
+    elif page == "อุปกรณ์":  page_equipment()
     elif page == "เบิก":      page_borrow()
     elif page == "คืน":       page_return()
     elif page == "รายงาน":    page_report()
     elif page == "ตั้งค่า":   page_settings()
-    footer()
+
+    st.markdown("---")
+    st.markdown('''
+    <div style="text-align:center;color:#999;font-size:0.8rem;padding:8px 0 16px 0;line-height:1.9;">
+        🔬 ระบบบริหารจัดการอุปกรณ์ห้องปฏิบัติการ<br>
+        <b style="color:#7d3020;">☁️ Cloud Edition</b> — Supabase + Cloudinary<br>
+        พัฒนาโดย <b style="color:#5c2018;">รศ.ดร.อิทธิพล มีผล</b><br>
+        ภาควิชาครุศาสตร์โยธา &nbsp;|&nbsp; คณะครุศาสตร์อุตสาหกรรม<br>
+        มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ (KMUTNB)
+    </div>
+    ''', unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
