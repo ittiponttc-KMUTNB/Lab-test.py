@@ -565,10 +565,14 @@ def render_top_nav():
             ("คลังอุปกรณ์", "📦", "คลัง"),
         ]
     else:
-        # ผู้ใช้ทั่วไป — เห็นแค่ปุ่มหน้าหลัก (เบิก/คืนอยู่ใน card แล้ว)
-        nav_items = [
-            ("หน้าหลัก", "🏠", "🏠 หน้าหลัก"),
-        ]
+        # ผู้ใช้ทั่วไป — แสดงปุ่มหน้าหลักเฉพาะตอนที่ไม่ได้อยู่หน้าหลัก
+        if page != "หน้าหลัก":
+            if st.button("🏠 หน้าหลัก", key="tnav_หน้าหลัก",
+                         use_container_width=False):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+            st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+        return  # ไม่ render cols ด้านล่าง
 
     cols = st.columns(len(nav_items))
     for i, (pname, icon, label) in enumerate(nav_items):
