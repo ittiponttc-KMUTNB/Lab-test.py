@@ -1837,10 +1837,79 @@ def page_return():
         if df_pending.empty:
             st.info("✅ ไม่มีรายการรอตรวจสอบ")
         else:
-            # sort ใหม่หลัง enrich (merge อาจทำให้ลำดับเปลี่ยน)
+            # sort ใหม่หลัง enrich
             if "id" in df_pending.columns:
                 df_pending = df_pending.sort_values("id", ascending=False)
+
             st.warning(f"🔍 {len(df_pending)} รายการรอ Admin ตรวจสอบ")
+
+            # ── ปุ่ม ตรวจสอบทั้งหมด (Admin only) ──────────────────────────
+            if is_admin():
+                st.markdown(
+                    '<div class="info-box" style="border-color:#2D6A4F;">'
+                    '💡 <b>ตรวจสอบทั้งหมด</b> — ยืนยันรับคืนทุกรายการด้วยสภาพ <b>"ปกติ"</b> '
+                    'ใช้เมื่ออุปกรณ์ทุกชิ้นสภาพดี ไม่มีชำรุดหรือสูญหาย'
+                    '</div>', unsafe_allow_html=True)
+
+                col_bulk, col_info = st.columns([2, 3])
+                with col_bulk:
+                    if st.button(f"✅ ยืนยันรับคืนทั้งหมด ({len(df_pending)} รายการ)",
+                                 type="primary", use_container_width=True,
+                                 key="bulk_confirm_btn"):
+                        st.session_state["bulk_confirm_pending"] = True
+
+                with col_info:
+                    st.caption("⚠️ ระบบจะตั้งสภาพ 'ปกติ' ให้ทุกรายการ\nหากมีชำรุด/สูญหาย ให้กดรายการนั้นแยกก่อน")
+
+                # Confirmation dialog
+                if st.session_state.get("bulk_confirm_pending"):
+                    st.error(
+                        f"⚠️ **ยืนยันรับคืนทั้งหมด {len(df_pending)} รายการ?**\n\n"
+                        f"ระบบจะตั้งสภาพ **'ปกติ'** และเปลี่ยนสถานะเป็น **'คืนแล้ว'** ทุกรายการ\n"
+                        f"ไม่สามารถย้อนกลับได้ — กรุณาตรวจสอบรายการด้านล่างก่อนยืนยัน"
+                    )
+                    cb_yes, cb_no = st.columns(2)
+                    with cb_yes:
+                        if st.button("✅ ยืนยัน ดำเนินการเลย", type="primary",
+                                     use_container_width=True, key="bulk_yes"):
+                            success_count = 0
+                            error_count   = 0
+                            for _, r in df_pending.iterrows():
+                                try:
+                                    update_rows("borrow_transactions", {
+                                        "condition_in": "ปกติ",
+                                        "status": "คืนแล้ว"
+                                    }, "id", r["id"])
+                                    # คืน available_qty
+                                    cur_eq = query_table("supplies",
+                                                         select="available_qty,total_qty",
+                                                         filters=[("id","eq",r["supply_id"])])
+                                    if not cur_eq.empty:
+                                        cur_a = int(cur_eq.iloc[0]["available_qty"])
+                                        qty_ret = int(r["qty"])
+                                        new_avail = cur_a + qty_ret
+                                        new_stat  = "พร้อมใช้" if new_avail > 0 else "หมด"
+                                        update_rows("supplies", {
+                                            "available_qty": new_avail,
+                                            "status": new_stat
+                                        }, "id", r["supply_id"])
+                                    success_count += 1
+                                except Exception:
+                                    error_count += 1
+                            clear_all_cache()
+                            st.session_state.pop("bulk_confirm_pending", None)
+                            if error_count == 0:
+                                st.success(f"✅ ยืนยันรับคืนครบ {success_count} รายการแล้ว!")
+                            else:
+                                st.warning(f"⚠️ สำเร็จ {success_count} / ล้มเหลว {error_count} รายการ")
+                            st.rerun()
+                    with cb_no:
+                        if st.button("❌ ยกเลิก", use_container_width=True, key="bulk_no"):
+                            st.session_state.pop("bulk_confirm_pending", None)
+                            st.rerun()
+
+                st.divider()
+
             for _, r in df_pending.iterrows():
                 od = overdue_days(r["due_date"])
                 lbl = f"TX#{r['id']} | {r['sup_code']} {r['sup_name']} | {r['br_name']}"
