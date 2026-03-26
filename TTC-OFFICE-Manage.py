@@ -90,6 +90,10 @@ html, body, [class*="css"] {
     font-size: 16px;
     background-color: #ffffff;
 }
+/* padding ล่างเพื่อไม่ให้ dropdown โดน footer บัง */
+section[data-testid="stMain"] > div:first-child {
+    padding-bottom: 120px !important;
+}
 .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
     background-color: #ffffff !important;
 }
