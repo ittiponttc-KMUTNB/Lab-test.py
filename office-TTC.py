@@ -3,6 +3,8 @@ import pandas as pd
 import json
 import time
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
+_TZ_BKK = ZoneInfo("Asia/Bangkok")
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -12,7 +14,7 @@ import cloudinary.uploader
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ระบบเบิกอุปกรณ์สำนักงาน",
+    page_title="เบิกอุปกรณ์สำนักงาน",
     page_icon="🏢",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -86,39 +88,127 @@ st.markdown("""
 html, body, [class*="css"] {
     font-family: 'Sarabun', sans-serif;
     font-size: 16px;
-    background-color: #f4f6f4;
+    background-color: #ffffff;
 }
+/* padding ล่างเพื่อไม่ให้ dropdown โดน footer บัง */
+section[data-testid="stMain"] > div:first-child {
+    padding-bottom: 120px !important;
+}
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    background-color: #ffffff !important;
+}
+
+/* ── ซ่อน sidebar toggle บน mobile ── */
+[data-testid="collapsedControl"] { display: none; }
+
+/* ── ปุ่มทั่วไป ── */
 div.stButton > button {
-    height: 2.8rem; font-size: 0.95rem; border-radius: 8px;
-    font-family: 'Sarabun', sans-serif;
+    height: 3rem; font-size: 1rem; border-radius: 10px;
+    font-family: 'Sarabun', sans-serif; font-weight: 600;
 }
-input, textarea, select { font-size: 16px !important; }
+
+input, textarea { font-size: 16px !important; }
 div[data-baseweb="select"] { font-size: 16px; }
 
+/* ── Input / Dropdown — พื้นขาว ขอบชัด ── */
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div,
+div[data-baseweb="textarea"] > div,
+input[type="text"], input[type="number"], input[type="password"],
+textarea {
+    background-color: white !important;
+    border: 1.5px solid #b7d5c7 !important;
+    border-radius: 8px !important;
+}
+div[data-baseweb="select"] > div:hover,
+div[data-baseweb="input"] > div:hover {
+    border-color: #2D6A4F !important;
+}
+/* dropdown list popup */
+div[data-baseweb="popover"] ul {
+    background: white !important;
+}
+div[data-baseweb="popover"] li:hover {
+    background: #eaf2ee !important;
+}
+
+/* ── Metric cards ── */
 div[data-testid="metric-container"] {
-    background: #eaf2ee; border-radius: 10px;
-    padding: 12px; border: 1px solid #b7d5c7;
+    background: white; border-radius: 12px;
+    padding: 14px; border: 1px solid #c8e0d4;
+    box-shadow: 0 2px 8px rgba(27,67,50,0.07);
 }
-.page-title {
-    font-size: 1.4rem; font-weight: 700; color: #1b4332;
-    margin: 4px 0 16px 0; padding-bottom: 8px;
-    border-bottom: 3px solid #2D6A4F;
+
+/* ── Header ── */
+.app-header {
+    background: linear-gradient(135deg, #1b4332 0%, #2D6A4F 100%);
+    border-radius: 14px; padding: 16px 18px 12px 18px;
+    margin-bottom: 16px; color: white;
+    display: flex; align-items: center; gap: 12px;
 }
+.app-header-logo { font-size: 2.4rem; }
+.app-header-text h2 { margin: 0; font-size: 1.15rem; font-weight: 700; color: white; }
+.app-header-text p  { margin: 0; font-size: 0.78rem; color: #a8d5be; }
+
+/* ── Role badge ── */
+.role-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;
+    margin-bottom: 12px;
+}
+.role-user  { background: #e8f5ee; color: #1b4332; border: 1px solid #b7d5c7; }
+.role-admin { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+
+/* ── Quick action buttons (ผู้ใช้ทั่วไป) ── */
+.quick-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: white; border-radius: 14px; padding: 18px 10px;
+    border: 2px solid #d8ead2; box-shadow: 0 3px 10px rgba(27,67,50,0.08);
+    cursor: pointer; transition: all 0.18s ease;
+    text-decoration: none; color: #1b4332;
+    min-height: 100px;
+}
+.quick-btn:hover { border-color: #2D6A4F; box-shadow: 0 5px 18px rgba(27,67,50,0.15); transform: translateY(-2px); }
+.quick-btn .btn-icon { font-size: 2.2rem; margin-bottom: 6px; }
+.quick-btn .btn-label { font-size: 1rem; font-weight: 700; color: #1b4332; }
+.quick-btn .btn-sub   { font-size: 0.75rem; color: #52796F; margin-top: 2px; }
+
+/* ── Content padding ── */
+.main-content-pad { padding-bottom: 16px; }
+
+/* ── ซ่อน expander border-left ที่เป็นเส้นแดง ── */
+div[data-testid="stExpander"],
+div[data-testid="stExpander"] > details,
+div[data-testid="stExpander"] details summary,
+details[data-testid="stExpanderDetails"] {
+    border-left: none !important;
+    outline: none !important;
+}
+div[data-testid="stExpander"] > details {
+    border: 1px solid #e0e8e4 !important;
+    border-radius: 8px !important;
+}
+
+/* ── Section header ── */
 .section-header {
     font-size: 1rem; font-weight: 700; color: #1b4332;
     margin: 16px 0 8px 0; padding: 6px 10px;
     background: #eaf2ee; border-left: 4px solid #2D6A4F;
     border-radius: 0 6px 6px 0;
 }
+
+/* ── Page title ── */
+.page-title {
+    font-size: 1.3rem; font-weight: 700; color: #1b4332;
+    margin: 0 0 14px 0; padding-bottom: 8px;
+    border-bottom: 3px solid #2D6A4F;
+}
+
+/* ── Cards ── */
 .item-card {
     background: white; border-radius: 10px; padding: 12px 14px;
     margin-bottom: 10px; border: 1px solid #d8e8e0;
     box-shadow: 0 2px 6px rgba(45,106,79,0.06);
-}
-.group-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: 20px;
-    font-size: 0.78rem; font-weight: 600; color: white;
 }
 .overdue-card {
     background: #fff5f5; border-left: 4px solid #D62828;
@@ -128,16 +218,85 @@ div[data-testid="metric-container"] {
     background: #eaf2ee; border-left: 4px solid #2D6A4F;
     border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 6px 0;
 }
+
+/* ── Info box ── */
 .info-box {
     background: #eaf2ee; border: 1px solid #b7d5c7;
     border-radius: 8px; padding: 10px 14px; margin: 8px 0;
     font-size: 0.88rem; color: #1b4332;
 }
+
+/* ── Group badge ── */
+.group-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 0.78rem; font-weight: 600; color: white;
+}
 .qty-badge {
     display: inline-block; padding: 2px 8px; border-radius: 12px;
     font-size: 0.82rem; font-weight: 700;
 }
+
+/* ── Admin panel in sidebar ── */
+.admin-panel-title {
+    font-size: 0.85rem; font-weight: 700; color: #856404;
+    padding: 6px 0; border-bottom: 1px solid #ffc107; margin-bottom: 8px;
+}
+
+/* ── Step wizard ── */
+.step-bar {
+    display: flex; align-items: center; margin-bottom: 16px; gap: 0;
+}
+.step-item {
+    display: flex; flex-direction: column; align-items: center; flex: 1;
+}
+.step-circle {
+    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 700; border: 2px solid #d8e8e0;
+    background: white; color: #aaa;
+}
+.step-circle.done { background: #2D6A4F; border-color: #2D6A4F; color: white; }
+.step-circle.active { background: #1b4332; border-color: #1b4332; color: white; }
+.step-label { font-size: 0.7rem; color: #888; margin-top: 3px; }
+.step-label.active { color: #1b4332; font-weight: 700; }
+.step-line { flex: 1; height: 2px; background: #d8e8e0; }
+.step-line.done { background: #2D6A4F; }
+
 button[kind="primary"] { font-weight: 700; }
+
+/* ── Tabs — Pill style ทุกหน้า ── */
+div[data-testid="stTabs"] > div:first-child {
+    background: #f0f4f1;
+    border-radius: 12px;
+    padding: 5px;
+    gap: 6px;
+}
+div[data-testid="stTabs"] div[role="tablist"] {
+    border-bottom: none !important;
+    gap: 6px !important;
+}
+div[data-testid="stTabs"] button[role="tab"] {
+    border-radius: 8px !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    padding: 9px 14px !important;
+    color: #1b4332 !important;
+    background: white !important;
+    border: 1.5px solid #c8e0d4 !important;
+    transition: all 0.15s ease !important;
+}
+div[data-testid="stTabs"] button[role="tab"]:hover {
+    background: #eaf2ee !important;
+    border-color: #2D6A4F !important;
+    color: #1b4332 !important;
+}
+div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    background: #2D6A4F !important;
+    color: white !important;
+    border-color: #2D6A4F !important;
+    box-shadow: 0 2px 8px rgba(45,106,79,0.30) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -146,17 +305,35 @@ def is_admin():
     return st.session_state.get("is_admin", False)
 
 def admin_login_widget():
+    """Admin login panel — แสดงใน sidebar เท่านั้น"""
     if is_admin():
-        st.sidebar.success("🔓 Admin Mode เปิดอยู่")
+        st.sidebar.markdown('<div class="admin-panel-title">🔓 Admin Mode เปิดอยู่</div>', unsafe_allow_html=True)
         if st.sidebar.button("🔒 ออกจากระบบ Admin", use_container_width=True):
             st.session_state.is_admin = False
             st.rerun()
+        # Admin nav เพิ่มเติม
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("**📂 Admin เมนู:**")
+        admin_pages = [
+            ("Dashboard", "🏠", "ภาพรวม"),
+            ("คลังอุปกรณ์", "📦", "จัดการคลัง"),
+            ("รายงาน", "📊", "รายงาน"),
+            ("ตั้งค่า", "⚙️", "ตั้งค่า"),
+        ]
+        for pname, icon, label in admin_pages:
+            active = st.session_state.get("page") == pname
+            btn_label = f"{icon} {label}" + (" ◀" if active else "")
+            if st.sidebar.button(btn_label, key=f"sidebar_nav_{pname}", use_container_width=True,
+                                  type="primary" if active else "secondary"):
+                st.session_state.page = pname
+                st.rerun()
     else:
-        with st.sidebar.expander("🔒 Admin Login"):
-            pwd = st.text_input("รหัสผ่าน", type="password", key="admin_pwd")
+        with st.sidebar.expander("🔒 Admin Login", expanded=False):
+            pwd = st.text_input("รหัสผ่าน Admin", type="password", key="admin_pwd")
             if st.button("เข้าสู่ระบบ", use_container_width=True, key="admin_login_btn"):
                 if pwd == ADMIN_PASSWORD:
                     st.session_state.is_admin = True
+                    st.session_state.page = "Dashboard"
                     st.rerun()
                 else:
                     st.error("รหัสผ่านไม่ถูกต้อง")
@@ -213,7 +390,7 @@ def delete_rows(table, match_col=None, match_val=None, delete_all=False):
     return _sb_retry(_do)
 
 # ─── Cached Stats ─────────────────────────────────────────────────────────────
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_sidebar_stats():
     df_sup = query_table("supplies", select="id,available_qty,group_type")
     total  = len(df_sup)
@@ -228,6 +405,12 @@ def load_sidebar_stats():
     df_consume = query_table("consume_transactions", select="id",
                              limit=1)  # just check exist
     return total, avail, n_borrow, n_overdue
+
+def clear_all_cache():
+    """เรียกหลังทุก write operation — clear cache ทั้งหมดที่เกี่ยวข้อง"""
+    load_sidebar_stats.clear()
+    load_active_borrows.clear()
+    load_pending_borrows.clear()
 
 # ─── Batch Enrich ─────────────────────────────────────────────────────────────
 def _enrich_borrow(df_tx):
@@ -261,6 +444,7 @@ def _enrich_borrow(df_tx):
     )
     return merged
 
+@st.cache_data(ttl=10, show_spinner=False)
 def load_active_borrows():
     df = query_table("borrow_transactions",
                      select="id,supply_id,borrower_id,qty,borrow_date,due_date,note,return_date,condition_in,status",
@@ -268,11 +452,12 @@ def load_active_borrows():
                      order=[("due_date",{"desc":False})])
     return _enrich_borrow(df)
 
+@st.cache_data(ttl=10, show_spinner=False)
 def load_pending_borrows():
     df = query_table("borrow_transactions",
                      select="id,supply_id,borrower_id,qty,borrow_date,due_date,return_date,condition_in,note,status",
                      filters=[("status","eq","รอตรวจสอบ")],
-                     order=[("return_date",{"desc":False})])
+                     order=[("id",{"desc":True})])
     return _enrich_borrow(df)
 
 # ─── Cloudinary ───────────────────────────────────────────────────────────────
@@ -334,71 +519,207 @@ def is_consumable(group_name):
     return SUPPLY_GROUPS.get(group_name, {}).get("type", "consumable") == "consumable"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# NAVIGATION
+# NAVIGATION — Role-based + Mobile Bottom Bar
 # ═════════════════════════════════════════════════════════════════════════════
-def nav():
-    if "page" not in st.session_state:
-        st.session_state.page = "Dashboard"
-
-    with st.sidebar:
-        st.markdown("## 🏢 ระบบเบิกอุปกรณ์สำนักงาน")
-        st.markdown("---")
-        admin_login_widget()
-        st.markdown("---")
-        try:
-            total, avail, n_borrow, n_overdue = load_sidebar_stats()
-            st.metric("📦 รายการอุปกรณ์", total)
-            col1, col2 = st.columns(2)
-            col1.metric("✅ คงเหลือ", avail)
-            col2.metric("🔄 ยืมอยู่", n_borrow)
-            if n_overdue > 0:
-                st.error(f"⚠️ เกินกำหนด {n_overdue} รายการ!")
-        except Exception:
-            st.caption("⏳ กำลังโหลด...")
-
-        st.markdown("---")
-        st.markdown("**📂 กลุ่มอุปกรณ์:**")
-        for gname, ginfo in SUPPLY_GROUPS.items():
-            icon  = ginfo["icon"]
-            color = ginfo["color"]
-            gtype = "ใช้แล้วหมด" if ginfo["type"] == "consumable" else "เบิก-คืน"
-            st.markdown(
-                f'<div style="padding:4px 8px;margin:2px 0;border-left:3px solid {color};'
-                f'font-size:0.83rem;">{icon} <b>{gname}</b><br>'
-                f'<span style="color:#52796F;font-size:0.75rem;">{gtype}</span></div>',
-                unsafe_allow_html=True)
-
-    # Logo & header
+def render_header():
+    """App header — โลโก้ + ชื่อ + role badge"""
     logo_html = ""
     if LOGO_URL:
-        logo_opt = optimized_url(LOGO_URL, 140, 140, "fit") if "cloudinary" in LOGO_URL else LOGO_URL
-        logo_html = f'<img src="{logo_opt}" style="width:60px;height:auto;margin-bottom:4px;" loading="lazy"><br>'
+        logo_opt = optimized_url(LOGO_URL, 100, 100, "fit") if "cloudinary" in LOGO_URL else LOGO_URL
+        logo_html = f'<img src="{logo_opt}" style="width:72px;height:auto;border-radius:10px;" loading="lazy">'
+    else:
+        logo_html = '<span style="font-size:3rem;">🏢</span>'
 
-    st.markdown(
-        f'<div style="text-align:center;margin-bottom:12px;">'
-        f'{logo_html}'
-        f'<span style="font-size:1.1rem;font-weight:700;color:#1b4332;">'
-        f'🏢 ระบบเบิกอุปกรณ์สำนักงาน</span><br>'
-        f'<span style="font-size:0.8rem;color:#52796F;">ภาควิชาครุศาสตร์โยธา — มจพ.</span></div>',
-        unsafe_allow_html=True
+    role_badge = (
+        '<span class="role-badge role-admin">🔑 Admin Mode</span>'
+        if is_admin() else
+        '<span class="role-badge role-user">👤 ผู้ใช้ทั่วไป</span>'
     )
 
-    NAV = [
-        ("Dashboard","🏠","หน้าหลัก"),
-        ("คลังอุปกรณ์","📦","คลัง"),
-        ("เบิกอุปกรณ์","📋","เบิก"),
-        ("คืนอุปกรณ์","↩️","คืน"),
-        ("รายงาน","📊","รายงาน"),
-        ("ตั้งค่า","⚙️","ตั้งค่า"),
-    ]
-    cols = st.columns(len(NAV))
-    for i, (name, icon, label) in enumerate(NAV):
-        active = st.session_state.page == name
+    st.markdown(
+        f'<div class="app-header">'
+        f'<div class="app-header-logo" style="min-width:80px;">{logo_html}</div>'
+        f'<div class="app-header-text">'
+        f'<h2>ระบบเบิกอุปกรณ์สำนักงาน</h2>'
+        f'<p>ภาควิชาครุศาสตร์โยธา — มจพ.</p>'
+        f'</div></div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(role_badge, unsafe_allow_html=True)
+
+
+def render_top_nav():
+    """Navigation ปุ่มแถวบน — ใต้ header เสมอ"""
+    page = st.session_state.get("page", "หน้าหลัก")
+
+    if is_admin():
+        try:
+            df_pend = query_table("borrow_transactions", select="id",
+                                  filters=[("status","eq","รอตรวจสอบ")])
+            n_pending = len(df_pend)
+        except Exception:
+            n_pending = 0
+        pending_badge = f" ({n_pending})" if n_pending > 0 else ""
+
+        nav_items = [
+            ("หน้าหลัก",    "🏠", "หน้าหลัก"),
+            ("เบิกอุปกรณ์", "📋", "เบิก"),
+            ("คืนอุปกรณ์",  "🔍", f"ตรวจสอบ{pending_badge}"),
+            ("Dashboard",   "📊", "ภาพรวม"),
+            ("คลังอุปกรณ์", "📦", "คลัง"),
+        ]
+    else:
+        # ผู้ใช้ทั่วไป — แสดงปุ่มหน้าหลักเฉพาะตอนที่ไม่ได้อยู่หน้าหลัก
+        if page != "หน้าหลัก":
+            if st.button("🏠 หน้าหลัก", key="tnav_หน้าหลัก",
+                         use_container_width=False):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+            st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+        return  # ไม่ render cols ด้านล่าง
+
+    cols = st.columns(len(nav_items))
+    for i, (pname, icon, label) in enumerate(nav_items):
         with cols[i]:
-            if st.button(f"{icon}\n{label}", key=f"nav_{name}",
-                         type="primary" if active else "secondary",
-                         use_container_width=True):
-                st.session_state.page = name
+            is_active = page == pname
+            if st.button(
+                f"{icon}\n{label}" if is_admin() else label,
+                key=f"tnav_{pname}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary"
+            ):
+                st.session_state.page = pname
+                st.rerun()
+
+    st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+
+
+
+def nav():
+    if "page" not in st.session_state:
+        st.session_state.page = "หน้าหลัก"
+
+    # Sidebar: Admin login + stats (ย่อ)
+    with st.sidebar:
+        st.markdown("## 🏢 ระบบเบิกอุปกรณ์")
+        admin_login_widget()
+        if is_admin():
+            st.markdown("---")
+            try:
+                total, avail, n_borrow, n_overdue = load_sidebar_stats()
+                st.metric("📦 รายการ", total)
+                c1, c2 = st.columns(2)
+                c1.metric("✅ คงเหลือ", avail)
+                c2.metric("🔄 ยืมอยู่", n_borrow)
+                if n_overdue > 0:
+                    st.error(f"⚠️ เกินกำหนด {n_overdue} รายการ!")
+            except Exception:
+                st.caption("⏳ กำลังโหลด...")
+
+    render_header()
+    render_top_nav()
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PAGE: หน้าหลัก (Quick Actions — ผู้ใช้ทั่วไป)
+# ═════════════════════════════════════════════════════════════════════════════
+def page_home():
+    """หน้าหลัก — Quick action buttons ขนาดใหญ่ ผู้ใช้ทั่วไปสัมผัสได้ง่าย"""
+
+    # สถานะสั้น ๆ สำหรับผู้ใช้ทั่วไป
+    try:
+        total, avail, n_borrow, n_overdue = load_sidebar_stats()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("📦 รายการ", total)
+        c2.metric("✅ คงเหลือ", avail)
+        c3.metric("🔄 ยืมอยู่", n_borrow)
+        if n_overdue > 0:
+            st.error(f"⚠️ มีอุปกรณ์เกินกำหนดคืน {n_overdue} รายการ! กรุณาติดต่อเจ้าหน้าที่")
+    except Exception:
+        st.warning("⏳ กำลังโหลดข้อมูล...")
+
+    st.markdown("---")
+    st.markdown('<div class="section-header">🚀 ทำรายการ</div>', unsafe_allow_html=True)
+
+    # CSS: ทำให้ปุ่ม Streamlit หน้าตาเป็น card ใหญ่เลย
+    st.markdown("""
+    <style>
+    /* target เฉพาะ 2 ปุ่มนี้ผ่าน key */
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"],
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"] {
+        height: 130px !important;
+        border-radius: 14px !important;
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        white-space: pre-line !important;
+        line-height: 1.6 !important;
+        padding: 16px 12px !important;
+        border: 2px solid #d8ead2 !important;
+        background: white !important;
+        color: #1b4332 !important;
+        box-shadow: 0 3px 10px rgba(27,67,50,0.08) !important;
+        transition: all 0.18s ease !important;
+    }
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:hover,
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:hover {
+        border-color: #2D6A4F !important;
+        box-shadow: 0 6px 20px rgba(27,67,50,0.18) !important;
+        transform: translateY(-3px) !important;
+        background: #f4fbf7 !important;
+        color: #1b4332 !important;
+    }
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:active,
+    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:active {
+        transform: scale(0.97) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("📋\nเบิกอุปกรณ์\nสิ้นเปลือง / เบิก-คืน",
+                     key="home_to_request", use_container_width=True):
+            st.session_state.page = "เบิกอุปกรณ์"
+            st.rerun()
+    with col_b:
+        if st.button("↩️\nคืนอุปกรณ์\nแจ้งนำอุปกรณ์มาคืน",
+                     key="home_to_return", use_container_width=True):
+            st.session_state.page = "คืนอุปกรณ์"
+            st.rerun()
+
+    # ถ้าไม่ใช่ Admin — แสดงกล่องคำแนะนำ
+    if not is_admin():
+        st.markdown("""
+        <div class="info-box" style="margin-top:16px;">
+        📌 <b>คำแนะนำการใช้งาน</b><br>
+        • <b>เบิกอุปกรณ์</b> — เลือกของที่ต้องการ กรอกชื่อ กดยืนยัน<br>
+        • <b>คืนอุปกรณ์</b> — ค้นหารายการที่ยืม กดแจ้งคืน รอ Admin ตรวจสอบ<br>
+        • สอบถามเพิ่มเติมติดต่อ <b>เจ้าหน้าที่สำนักงาน</b>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown(
+            '<div style="text-align:center;color:#888;font-size:0.8rem;">'
+            '🔒 หากต้องการใช้งานระบบ Admin<br>'
+            'กรุณา Login ที่เมนู ☰ มุมซ้ายบน'
+            '</div>', unsafe_allow_html=True)
+
+    else:
+        # Admin เห็น shortcut ไปหน้าอื่น
+        st.markdown("---")
+        st.markdown('<div class="section-header">⚡ Admin Shortcuts</div>', unsafe_allow_html=True)
+        col_x, col_y, col_z = st.columns(3)
+        with col_x:
+            if st.button("📊 ภาพรวม", use_container_width=True, key="home_to_dash"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
+        with col_y:
+            if st.button("🔍 ตรวจสอบการคืน", use_container_width=True, key="home_to_return_admin"):
+                st.session_state.page = "คืนอุปกรณ์"
+                st.rerun()
+        with col_z:
+            if st.button("📦 จัดการคลัง", use_container_width=True, key="home_to_inv"):
+                st.session_state.page = "คลังอุปกรณ์"
                 st.rerun()
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -419,6 +740,15 @@ def page_dashboard():
     c3.metric("🔄 กำลังยืม", n_borrow)
     c4.metric("⚠️ เกินกำหนด", n_overdue, delta=f"{n_overdue}" if n_overdue > 0 else None,
               delta_color="inverse" if n_overdue > 0 else "off")
+
+    # ปุ่ม refresh manual
+    col_ref, col_time = st.columns([1, 3])
+    with col_ref:
+        if st.button("🔄 รีเฟรชข้อมูล", use_container_width=True, key="dash_refresh"):
+            clear_all_cache()
+            st.rerun()
+    with col_time:
+        st.caption(f"⏱️ อัพเดทอัตโนมัติทุก 30 วินาที | ล่าสุด: {datetime.now(_TZ_BKK).strftime('%H:%M:%S')}")
 
     # กลุ่มอุปกรณ์ summary
     st.markdown('<div class="section-header">📂 สรุปตามกลุ่ม</div>', unsafe_allow_html=True)
@@ -471,12 +801,13 @@ def page_dashboard():
         for _, r in df_active.iterrows():
             od = overdue_days(r["due_date"])
             bc = "#D62828" if od > 0 else "#2D6A4F"
+            phone_str = f' | 📞 {r["br_phone"]}' if pd.notna(r.get("br_phone")) and r.get("br_phone") else ""
             st.markdown(
                 f'<div class="item-card" style="border-left:4px solid {bc};">'
                 f'{group_badge(r.get("sup_group",""))}'
                 f' <b>{r["sup_code"]}</b> — {r["sup_name"]} '
                 f'<span class="qty-badge" style="background:#e0eeea;color:#1b4332;">{r["qty"]} ชิ้น</span><br>'
-                f'👤 {r["br_name"]} ({r["br_type"]})<br>'
+                f'👤 {r["br_name"]} ({r["br_type"]}){phone_str}<br>'
                 f'📅 เบิก {r["borrow_date"]} | กำหนดคืน <b>{r["due_date"]}</b>'
                 + (f' &nbsp;<b style="color:#D62828;">⚠️ เกิน {od} วัน</b>' if od > 0 else "")
                 + '</div>', unsafe_allow_html=True)
@@ -608,7 +939,7 @@ def page_inventory():
                                 st.error("❌ ลบไม่ได้ มีการยืมอยู่")
                             else:
                                 delete_rows("supplies", "id", r["id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.success("✅ ลบแล้ว")
                                 st.rerun()
 
@@ -723,12 +1054,85 @@ def page_inventory():
                             # คงอยู่ที่รายการเดิมหลังบันทึก
                             st.session_state["_next_sup_sel"] = f"{sv_code} — {sv_name}"
 
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
     else:
         st.info("🔒 การเพิ่ม/แก้ไขอุปกรณ์ สำหรับ Admin เท่านั้น")
+
+# ─── Duplicate Submit Guard (Session Timestamp) ───────────────────────────────
+DUPLICATE_GUARD_SECONDS = 10
+
+def _make_submit_key(supply_id, name):
+    """สร้าง key จาก supply_id + ชื่อผู้เบิก"""
+    return f"{supply_id}|{str(name).strip().lower()}"
+
+def check_duplicate_submit(supply_id, name):
+    """
+    คืนค่า:
+      "ok"        — ไม่ซ้ำ ผ่านได้เลย
+      "duplicate" — กดซ้ำภายใน DUPLICATE_GUARD_SECONDS วินาที
+      "submitting" — กำลัง submit อยู่ (ป้องกัน double click)
+    """
+    # ป้องกัน double-click: ถ้า flag is_submitting ยังอยู่
+    if st.session_state.get("is_submitting"):
+        return "submitting"
+    key = _make_submit_key(supply_id, name)
+    last = st.session_state.get("last_submit_guard")
+    if last and last["key"] == key:
+        elapsed = time.time() - last["ts"]
+        if elapsed < DUPLICATE_GUARD_SECONDS:
+            return "duplicate"
+    return "ok"
+
+def register_submit(supply_id, name):
+    """ล็อกทันที — เรียกก่อน insert เสมอ"""
+    st.session_state["is_submitting"] = True
+    st.session_state["last_submit_guard"] = {
+        "key": _make_submit_key(supply_id, name),
+        "ts": time.time()
+    }
+
+def finish_submit():
+    """เรียกหลัง insert สำเร็จ — ปลดล็อก"""
+    st.session_state.pop("is_submitting", None)
+
+def clear_submit_guard():
+    """ล้าง guard ทั้งหมด (เมื่อผู้ใช้ยืนยัน ยืม 2 รอบ)"""
+    st.session_state.pop("last_submit_guard", None)
+    st.session_state.pop("is_submitting", None)
+
+
+
+def render_step_bar(current_step: int, steps: list):
+    """แสดง progress bar แบบ step wizard"""
+    html = '<div class="step-bar">'
+    for i, label in enumerate(steps):
+        step_num = i + 1
+        if step_num < current_step:
+            circle_cls, label_cls = "done", ""
+            circle_content = "✓"
+        elif step_num == current_step:
+            circle_cls, label_cls = "active", "active"
+            circle_content = str(step_num)
+        else:
+            circle_cls, label_cls = "", ""
+            circle_content = str(step_num)
+
+        if i > 0:
+            line_cls = "done" if i < current_step - 1 else ""
+            html += f'<div class="step-line {line_cls}"></div>'
+
+        html += (
+            f'<div class="step-item">'
+            f'<div class="step-circle {circle_cls}">{circle_content}</div>'
+            f'<div class="step-label {label_cls}">{label}</div>'
+            f'</div>'
+        )
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: BORROW/REQUEST (เบิกอุปกรณ์)
@@ -736,14 +1140,104 @@ def page_inventory():
 def page_request():
     st.markdown('<div class="page-title">📋 เบิกอุปกรณ์</div>', unsafe_allow_html=True)
 
+    # ── Success Screen เต็มหน้าจอ ──
+    if st.session_state.get("show_balloons"):
+        st.session_state.pop("show_balloons", None)
+        msg_raw = st.session_state.pop("success_msg", "")
+
+        # แยกบรรทัดจาก success_msg มาแสดงสวยงาม
+        lines = [l.strip() for l in msg_raw.split("\n") if l.strip()]
+        detail_html = "".join(
+            f'<div style="margin:6px 0;font-size:1.05rem;line-height:1.7;">{l}</div>'
+            for l in lines[1:]  # ข้าม "✅ บันทึกสำเร็จ!" บรรทัดแรก
+        )
+
+        st.markdown(f"""
+        <style>
+        /* ซ่อนทุกอย่างยกเว้น success screen */
+        .success-screen-wrap ~ div,
+        .success-screen-wrap ~ section {{ display: none !important; }}
+        </style>
+        <div class="success-screen-wrap" style="
+            min-height: 80vh;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            text-align: center; padding: 24px 20px;
+        ">
+            <div style="font-size:5rem; margin-bottom:12px; animation: pop 0.4s ease;">🎉</div>
+            <div style="
+                font-size:1.6rem; font-weight:800; color:#1b4332;
+                margin-bottom:8px;
+            ">บันทึกสำเร็จ!</div>
+            <div style="
+                background:#eaf2ee; border:2px solid #b7d5c7;
+                border-radius:16px; padding:20px 24px;
+                max-width:420px; width:100%;
+                text-align:left; margin:16px 0 24px 0;
+                color:#1b4332;
+            ">
+                {detail_html}
+            </div>
+        </div>
+        <style>
+        @keyframes pop {{
+            0%   {{ transform: scale(0.5); opacity:0; }}
+            70%  {{ transform: scale(1.2); }}
+            100% {{ transform: scale(1);   opacity:1; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.balloons()
+
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            if st.button("📋 เบิกอุปกรณ์อีกครั้ง", type="primary",
+                         use_container_width=True, key="back_to_request"):
+                st.rerun()
+            if st.button("🏠 กลับหน้าหลัก", use_container_width=True, key="back_to_home"):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+        return   # หยุด render ส่วนที่เหลือของหน้า
+
+    st.markdown("""
+    <style>
+    div[data-testid="stTabs"] > div:first-child {
+        background: #f0f4f1; border-radius: 12px; padding: 5px; gap: 6px;
+    }
+    div[data-testid="stTabs"] div[role="tablist"] { border-bottom: none !important; gap: 6px !important; }
+    div[data-testid="stTabs"] button[role="tab"] {
+        border-radius: 8px !important; font-size: 0.92rem !important; font-weight: 600 !important;
+        padding: 9px 14px !important; color: #1b4332 !important;
+        background: white !important; border: 1.5px solid #c8e0d4 !important;
+        transition: all 0.15s ease !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"]:hover {
+        background: #eaf2ee !important; border-color: #2D6A4F !important; color: #1b4332 !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        background: #2D6A4F !important; color: white !important;
+        border-color: #2D6A4F !important; box-shadow: 0 2px 8px rgba(45,106,79,0.30) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # แยก tab ตามประเภท
-    tab_con, tab_borrow = st.tabs(["🖊️ เบิกอุปกรณ์สิ้นเปลือง", "🔌 เบิก-ยืมอุปกรณ์คืน"])
+    tab_con, tab_borrow = st.tabs(["🖊️ สิ้นเปลือง (ไม่คืน)", "🔌 เบิก-คืน"])
 
     # ── TAB 1: เบิกอุปกรณ์สิ้นเปลือง (consumable) ───────────────────────────
     with tab_con:
+        # Step state
+        if "con_step" not in st.session_state:
+            st.session_state.con_step = 1
+
+        render_step_bar(st.session_state.con_step, ["เลือกอุปกรณ์", "ข้อมูลผู้เบิก", "ยืนยัน"])
+
         st.markdown(
-            '<div class="info-box">🖊️ อุปกรณ์ <b>สำนักงาน</b> และ <b>ทั่วไป</b> — '
-            'ใช้แล้วหมดไป <b>ไม่ต้องคืน</b></div>',
+            '<div style="background:#eaf4fb;border:1.5px solid #aed6f1;border-left:5px solid #2980b9;'
+            'border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.9rem;color:#1a5276;">'
+            'ℹ️ อุปกรณ์ <b>สำนักงาน</b> และ <b>ทั่วไป</b> — '
+            'ใช้แล้วหมดไป <b style="color:#2980b9;">ไม่ต้องคืน</b></div>',
             unsafe_allow_html=True)
 
         df_con_sup = query_table("supplies",
@@ -758,7 +1252,7 @@ def page_request():
             # กรอง group
             groups_avail = sorted(df_con_sup["group_name"].dropna().unique().tolist())
             g_sel = st.selectbox("📂 กลุ่มอุปกรณ์", ["ทั้งหมด"] + groups_avail, key="con_grp")
-            search_c = st.text_input("🔍 ค้นหา", placeholder="ชื่อ หรือ รหัส", key="con_search")
+            search_c = st.text_input("🔍 ค้นหาอุปกรณ์ที่ต้องการ", placeholder="ชื่ออุปกรณ์ หรือ รหัส", key="con_search")
 
             df_f = df_con_sup.copy()
             if g_sel != "ทั้งหมด":
@@ -773,77 +1267,191 @@ def page_request():
             else:
                 opts = {f"{r['code']} — {r['name']}  ({r['available_qty']} {r.get('unit','ชิ้น')} คงเหลือ)": r["id"]
                         for _, r in df_f.iterrows()}
-                sel_lbl = st.selectbox("เลือกอุปกรณ์ *", list(opts.keys()), key="con_eq")
-                eq_row = df_f[df_f["id"] == opts[sel_lbl]].iloc[0]
 
-                c_img, c_info = st.columns([1, 2])
-                with c_img:
-                    show_image(eq_row.get("image_url"), size="preview")
-                with c_info:
-                    st.markdown(group_badge(eq_row.get("group_name","")), unsafe_allow_html=True)
-                    st.markdown(f"**{eq_row['code']}** — {eq_row['name']}")
-                    st.markdown(f"คงเหลือ: **{eq_row['available_qty']}** {eq_row.get('unit','ชิ้น')}")
-                    if eq_row.get("description"):
-                        st.caption(eq_row["description"])
+                # ── STEP 1: เลือกอุปกรณ์ ──
+                if st.session_state.con_step == 1:
+                    sel_lbl = st.selectbox("เลือกอุปกรณ์ *", list(opts.keys()), key="con_eq")
+                    eq_row = df_f[df_f["id"] == opts[sel_lbl]].iloc[0]
 
-                qty_con = st.number_input("จำนวนที่ต้องการเบิก *", min_value=1,
-                                          max_value=int(eq_row["available_qty"]), value=1, key="con_qty")
-                st.divider()
-                st.markdown('<div class="section-header">👤 ข้อมูลผู้เบิก</div>', unsafe_allow_html=True)
-                req_name = st.text_input("ชื่อ-นามสกุล *", placeholder="กรอกชื่อ-นามสกุล", key="con_name")
-                req_type = st.radio("ประเภท", ["นักศึกษา","บุคลากร/อาจารย์"], horizontal=True, key="con_type")
-                req_dept = st.text_input("ภาควิชา / หน่วยงาน", key="con_dept")
-                purpose  = st.text_input("วัตถุประสงค์การเบิก (ถ้ามี)", key="con_purpose")
-                req_date = st.date_input("วันที่เบิก", value=date.today(), key="con_date")
+                    c_img, c_info = st.columns([1, 2])
+                    with c_img:
+                        show_image(eq_row.get("image_url"), size="preview")
+                    with c_info:
+                        st.markdown(group_badge(eq_row.get("group_name","")), unsafe_allow_html=True)
+                        st.markdown(f"**{eq_row['code']}** — {eq_row['name']}")
+                        st.markdown(f"คงเหลือ: **{eq_row['available_qty']}** {eq_row.get('unit','ชิ้น')}")
+                        if eq_row.get("description"):
+                            st.caption(eq_row["description"])
 
-                if st.button("✅ ยืนยันการเบิก", type="primary", use_container_width=True, key="con_submit"):
-                    if not req_name.strip():
-                        st.error("❌ กรุณากรอกชื่อผู้เบิก")
-                    elif req_date > date.today():
-                        st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า กรุณาใช้วันที่ปัจจุบันหรือก่อนหน้า")
-                    else:
-                        try:
-                            insert_row("consume_transactions", {
-                                "supply_id": int(opts[sel_lbl]),
-                                "requester_name": req_name.strip(),
-                                "requester_type": req_type,
-                                "department": req_dept or None,
-                                "qty": qty_con,
-                                "request_date": str(req_date),
-                                "purpose": purpose or None,
-                                "status": "เบิกแล้ว"
-                            })
-                            new_avail = int(eq_row["available_qty"]) - qty_con
-                            update_rows("supplies", {"available_qty": new_avail}, "id", int(opts[sel_lbl]))
-                            # อัพเดทสถานะถ้าหมด
-                            if new_avail <= 0:
-                                update_rows("supplies", {"status": "หมด"}, "id", int(opts[sel_lbl]))
-                            load_sidebar_stats.clear()
-                            st.success(
-                                f"✅ บันทึกสำเร็จ!\n\n"
-                                f"👤 **{req_name}** เบิก {eq_row['name']} จำนวน {qty_con} {eq_row.get('unit','ชิ้น')}"
-                            )
-                            st.balloons()
-                        except Exception as e:
-                            st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                    qty_con = st.number_input("จำนวนที่ต้องการเบิก *", min_value=1,
+                                              max_value=int(eq_row["available_qty"]), value=1, key="con_qty")
+
+                    if st.button("ถัดไป → กรอกข้อมูลผู้เบิก", type="primary",
+                                 use_container_width=True, key="con_next"):
+                        st.session_state["con_selected_id"] = int(opts[sel_lbl])
+                        st.session_state["con_selected_label"] = sel_lbl
+                        st.session_state["con_selected_qty"] = qty_con
+                        st.session_state.con_step = 2
+                        st.rerun()
+
+                # ── STEP 2: ข้อมูลผู้เบิก ──
+                elif st.session_state.con_step == 2:
+                    # สรุปอุปกรณ์ที่เลือก
+                    sel_id  = st.session_state.get("con_selected_id")
+                    sel_qty = st.session_state.get("con_selected_qty", 1)
+                    eq_match = df_con_sup[df_con_sup["id"] == sel_id]
+                    if not eq_match.empty:
+                        eq_row2 = eq_match.iloc[0]
+                        st.markdown(
+                            f'<div class="consumable-card">'
+                            f'📦 <b>{eq_row2["code"]}</b> — {eq_row2["name"]} '
+                            f'<span class="qty-badge" style="background:#d8eedf;color:#1b4332;">'
+                            f'x{sel_qty} {eq_row2.get("unit","ชิ้น")}</span>'
+                            f'</div>', unsafe_allow_html=True)
+
+                    st.markdown('<div class="section-header">👤 ข้อมูลผู้เบิก</div>', unsafe_allow_html=True)
+                    req_name = st.text_input("ชื่อ-นามสกุลผู้เบิก *", placeholder="กรอกชื่อ-นามสกุล", key="con_name")
+                    req_type = st.radio("ประเภท", ["นักศึกษา","บุคลากร/อาจารย์"], horizontal=True, key="con_type")
+                    req_dept = st.text_input("ภาควิชา / หน่วยงาน", key="con_dept")
+                    purpose  = st.text_input("วัตถุประสงค์ (ถ้ามี)", key="con_purpose")
+                    req_date = st.date_input("วันที่เบิก", value=date.today(), key="con_date")
+
+                    col_back, col_submit = st.columns([1, 2])
+                    with col_back:
+                        if st.button("← ย้อนกลับ", use_container_width=True, key="con_back"):
+                            st.session_state.con_step = 1
+                            st.rerun()
+                    with col_submit:
+                        if st.button("✅ ยืนยันการเบิก", type="primary",
+                                     use_container_width=True, key="con_submit"):
+                            if not req_name.strip():
+                                st.error("❌ กรุณากรอกชื่อผู้เบิก")
+                            elif req_date > date.today():
+                                st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า")
+                            elif sel_id is None:
+                                st.error("❌ กรุณาเลือกอุปกรณ์ใหม่")
+                            elif check_duplicate_submit(sel_id, req_name) == "submitting":
+                                st.warning("⏳ กำลังบันทึก กรุณารอสักครู่...")
+                            elif check_duplicate_submit(sel_id, req_name) == "duplicate":
+                                st.session_state["con_pending_confirm"] = True
+                            else:
+                                st.session_state.pop("con_pending_confirm", None)
+                                eq_final = df_con_sup[df_con_sup["id"] == sel_id].iloc[0]
+                                try:
+                                    register_submit(sel_id, req_name)   # ล็อกก่อน insert
+                                    insert_row("consume_transactions", {
+                                        "supply_id": sel_id,
+                                        "requester_name": req_name.strip(),
+                                        "requester_type": req_type,
+                                        "department": req_dept or None,
+                                        "qty": sel_qty,
+                                        "request_date": str(req_date),
+                                        "purpose": purpose or None,
+                                        "status": "เบิกแล้ว"
+                                    })
+                                    new_avail = int(eq_final["available_qty"]) - sel_qty
+                                    update_rows("supplies", {"available_qty": new_avail}, "id", sel_id)
+                                    if new_avail <= 0:
+                                        update_rows("supplies", {"status": "หมด"}, "id", sel_id)
+                                    clear_all_cache()
+                                    finish_submit()
+                                    st.session_state.con_step = 1
+                                    st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ!\n\n"
+                                        f"👤 **{req_name}** ({req_type})"
+                                        + (f" — {req_dept}" if req_dept else "")
+                                        + f"\n📦 {eq_final['name']} จำนวน **{sel_qty} {eq_final.get('unit','ชิ้น')}**"
+                                        + f"\n📅 วันที่เบิก: {req_date}"
+                                    )
+                                    for k in ["con_selected_id","con_selected_label","con_selected_qty"]:
+                                        st.session_state.pop(k, None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
+                    # ── Duplicate Warning Dialog ──
+                    if st.session_state.get("con_pending_confirm"):
+                        eq_dup = df_con_sup[df_con_sup["id"] == sel_id] if sel_id else pd.DataFrame()
+                        eq_name_dup = eq_dup.iloc[0]["name"] if not eq_dup.empty else "?"
+                        st.warning(
+                            f"⚠️ **กดซ้ำภายใน {DUPLICATE_GUARD_SECONDS} วินาที!**\n\n"
+                            f"รายการล่าสุดอาจถูกบันทึกไปแล้ว\n"
+                            f"👤 **{req_name}** — **{eq_name_dup}** x{sel_qty}\n\n"
+                            f"ต้องการเบิก **2 รอบ** จริงหรือไม่?"
+                        )
+                        c_yes, c_no = st.columns(2)
+                        with c_yes:
+                            if st.button("✅ ใช่ เบิก 2 รอบ", type="primary",
+                                         use_container_width=True, key="con_confirm_yes"):
+                                clear_submit_guard()
+                                st.session_state.pop("con_pending_confirm", None)
+                                eq_final2 = df_con_sup[df_con_sup["id"] == sel_id].iloc[0]
+                                try:
+                                    register_submit(sel_id, req_name)   # ล็อกก่อน insert
+                                    insert_row("consume_transactions", {
+                                        "supply_id": sel_id,
+                                        "requester_name": req_name.strip(),
+                                        "requester_type": req_type,
+                                        "department": req_dept or None,
+                                        "qty": sel_qty,
+                                        "request_date": str(req_date),
+                                        "purpose": purpose or None,
+                                        "status": "เบิกแล้ว"
+                                    })
+                                    new_avail2 = int(eq_final2["available_qty"]) - sel_qty
+                                    update_rows("supplies", {"available_qty": new_avail2}, "id", sel_id)
+                                    if new_avail2 <= 0:
+                                        update_rows("supplies", {"status": "หมด"}, "id", sel_id)
+                                    clear_all_cache()
+                                    finish_submit()
+                                    st.session_state.con_step = 1
+                                    st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ! (รอบที่ 2)\n\n"
+                                        f"👤 **{req_name}** ({req_type})"
+                                        + f"\n📦 {eq_final2['name']} จำนวน **{sel_qty} {eq_final2.get('unit','ชิ้น')}**"
+                                        + f"\n📅 วันที่เบิก: {req_date}"
+                                    )
+                                    for k in ["con_selected_id","con_selected_label","con_selected_qty"]:
+                                        st.session_state.pop(k, None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                        with c_no:
+                            if st.button("❌ ยกเลิก ไม่เบิกซ้ำ", use_container_width=True,
+                                         key="con_confirm_no"):
+                                st.session_state.pop("con_pending_confirm", None)
+                                st.info("ℹ️ ยกเลิกแล้ว รายการไม่ถูกบันทึกซ้ำ")
+                                st.rerun()
 
     # ── TAB 2: เบิก-ยืม (borrow type — ต้องคืน) ─────────────────────────────
     with tab_borrow:
+        # Step state
+        if "bor_step" not in st.session_state:
+            st.session_state.bor_step = 1
+
+        render_step_bar(st.session_state.bor_step, ["เลือกอุปกรณ์", "ข้อมูลผู้ยืม", "ยืนยัน"])
+
         st.markdown(
-            '<div class="info-box">🔌 อุปกรณ์ <b>เบิก-คืน</b> — '
-            'ต้องนำมาคืนหลังใช้งาน Admin จะตรวจสอบสภาพ</div>',
+            '<div style="background:#eaf4fb;border:1.5px solid #aed6f1;border-left:5px solid #2980b9;'
+            'border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.9rem;color:#1a5276;">'
+            '🔌 อุปกรณ์ <b>เบิก-คืน</b> — '
+            '<b style="color:#C0392B;">ต้องนำมาคืน</b>หลังใช้งาน Admin จะตรวจสอบสภาพ</div>',
             unsafe_allow_html=True)
 
         df_bor_sup = query_table("supplies",
-                                 select="id,code,name,group_name,unit,available_qty,image_url,description",
-                                 filters=[("group_type","eq","borrow"),("status","eq","พร้อมใช้")],
+                                 select="id,code,name,group_name,unit,available_qty,status,image_url,description",
+                                 filters=[("group_type","eq","borrow")],
                                  order=[("code",{"desc":False})])
-        df_bor_sup = df_bor_sup[df_bor_sup["available_qty"] > 0] if not df_bor_sup.empty else df_bor_sup
+        # กรองออกเฉพาะที่ชำรุด/สูญหาย — ยืมออกหมดยังแสดงแต่ disable
+        if not df_bor_sup.empty:
+            df_bor_sup = df_bor_sup[~df_bor_sup["status"].isin(["ชำรุด","สูญหาย"])]
 
         if df_bor_sup.empty:
-            st.warning("⚠️ ไม่มีอุปกรณ์เบิก-คืนพร้อมใช้งาน")
+            st.warning("⚠️ ไม่มีอุปกรณ์เบิก-คืนในระบบ")
         else:
-            search_b = st.text_input("🔍 ค้นหา", placeholder="ชื่อ หรือ รหัส", key="bor_search")
+            search_b = st.text_input("🔍 ค้นหาอุปกรณ์ที่ต้องการ", placeholder="ชื่ออุปกรณ์ หรือ รหัส", key="bor_search")
             df_fb = df_bor_sup.copy()
             if search_b:
                 mask = (df_fb["name"].str.contains(search_b, case=False, na=False) |
@@ -853,95 +1461,270 @@ def page_request():
             if df_fb.empty:
                 st.info("ไม่พบรายการ")
             else:
-                opts_b = {f"{r['code']} — {r['name']}  ({r['available_qty']} {r.get('unit','ชิ้น')} คงเหลือ)": r["id"]
-                          for _, r in df_fb.iterrows()}
-                sel_b = st.selectbox("เลือกอุปกรณ์ *", list(opts_b.keys()), key="bor_eq")
-                eq_b  = df_fb[df_fb["id"] == opts_b[sel_b]].iloc[0]
-
-                c_img2, c_info2 = st.columns([1, 2])
-                with c_img2:
-                    show_image(eq_b.get("image_url"), size="preview")
-                with c_info2:
-                    st.markdown(group_badge(eq_b.get("group_name","")), unsafe_allow_html=True)
-                    st.markdown(f"**{eq_b['code']}** — {eq_b['name']}")
-                    st.markdown(f"คงเหลือ: **{eq_b['available_qty']}** {eq_b.get('unit','ชิ้น')}")
-                    if eq_b.get("description"):
-                        st.caption(eq_b["description"])
-
-                qty_b = st.number_input("จำนวน *", min_value=1,
-                                        max_value=int(eq_b["available_qty"]), value=1, key="bor_qty")
-                st.divider()
-                st.markdown('<div class="section-header">👤 ข้อมูลผู้ยืม</div>', unsafe_allow_html=True)
-                bor_type = st.radio("ประเภท", ["นักศึกษา","บุคลากร/อาจารย์"], horizontal=True, key="bor_type")
-                bor_name = st.text_input("ชื่อ-นามสกุล *", key="bor_name")
-                bor_sid  = st.text_input("รหัสนักศึกษา / รหัสพนักงาน", key="bor_sid")
-                bor_dept = st.text_input("ภาควิชา / หน่วยงาน", key="bor_dept")
-                bor_phone= st.text_input("เบอร์โทรศัพท์ *", key="bor_phone")
-                st.divider()
-                st.markdown('<div class="section-header">📅 วันที่</div>', unsafe_allow_html=True)
-                borrow_date = st.date_input("วันที่เบิก *", value=date.today(), key="bor_date")
-                due_date    = st.date_input("วันกำหนดคืน *", value=date.today(), key="bor_due")
-                cond_out    = st.selectbox("สภาพอุปกรณ์ขณะเบิก",
-                                           ["ปกติ","มีรอยขีดข่วน","ชำรุดบางส่วน"], key="bor_cond")
-                note_b = st.text_area("หมายเหตุ", key="bor_note")
-
-                if st.button("✅ ยืนยันการยืม", type="primary", use_container_width=True, key="bor_submit"):
-                    if not bor_name.strip():
-                        st.error("❌ กรุณากรอกชื่อ")
-                    elif not bor_phone.strip():
-                        st.error("❌ กรุณากรอกเบอร์โทรศัพท์")
-                    elif borrow_date > date.today():
-                        st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า กรุณาใช้วันที่ปัจจุบันหรือก่อนหน้า")
-                    elif due_date < borrow_date:
-                        st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
+                # แสดงทุกรายการ — ระบุสถานะในชื่อ
+                opts_b = {}
+                for _, r in df_fb.iterrows():
+                    avail = int(r["available_qty"])
+                    if avail > 0:
+                        label = f"{r['code']} — {r['name']}  ({avail} {r.get('unit','ชิ้น')} คงเหลือ)"
                     else:
-                        try:
-                            existing_borr = query_table("office_borrowers", select="id",
-                                                        filters=[("phone","eq",bor_phone.strip())])
-                            if not existing_borr.empty:
-                                borr_id = int(existing_borr.iloc[0]["id"])
-                                update_rows("office_borrowers", {
-                                    "name": bor_name.strip(), "type": bor_type,
-                                    "student_id": bor_sid or None, "department": bor_dept or None
-                                }, "id", borr_id)
+                        label = f"{r['code']} — {r['name']}  ⛔ ยืมออกทั้งหมด"
+                    opts_b[label] = r["id"]
+
+                # ── STEP 1: เลือกอุปกรณ์ ──
+                if st.session_state.bor_step == 1:
+                    sel_b = st.selectbox("เลือกอุปกรณ์ *", list(opts_b.keys()), key="bor_eq")
+                    eq_b  = df_fb[df_fb["id"] == opts_b[sel_b]].iloc[0]
+                    avail_b = int(eq_b["available_qty"])
+
+                    c_img2, c_info2 = st.columns([1, 2])
+                    with c_img2:
+                        show_image(eq_b.get("image_url"), size="preview")
+                    with c_info2:
+                        st.markdown(group_badge(eq_b.get("group_name","")), unsafe_allow_html=True)
+                        st.markdown(f"**{eq_b['code']}** — {eq_b['name']}")
+                        if avail_b > 0:
+                            st.markdown(f"คงเหลือ: **{avail_b}** {eq_b.get('unit','ชิ้น')}")
+                        else:
+                            st.markdown(
+                                f'<span style="color:#D62828;font-weight:700;">⛔ ยืมออกทั้งหมด — ไม่สามารถเบิกได้</span>',
+                                unsafe_allow_html=True)
+                        if eq_b.get("description"):
+                            st.caption(eq_b["description"])
+
+                    if avail_b > 0:
+                        qty_b = st.number_input("จำนวน *", min_value=1,
+                                                max_value=avail_b, value=1, key="bor_qty")
+                        if st.button("ถัดไป → กรอกข้อมูลผู้ยืม", type="primary",
+                                     use_container_width=True, key="bor_next"):
+                            st.session_state["bor_selected_id"]  = int(opts_b[sel_b])
+                            st.session_state["bor_selected_qty"] = qty_b
+                            st.session_state.bor_step = 2
+                            st.rerun()
+                    else:
+                        st.button("⛔ ไม่สามารถเบิกได้ — ยืมออกทั้งหมด",
+                                  use_container_width=True, key="bor_next", disabled=True)
+                        st.info("💡 กรุณารอจนกว่าจะมีการคืนอุปกรณ์ หรือติดต่อ Admin")
+
+                # ── STEP 2: ข้อมูลผู้ยืม + วันที่ ──
+                elif st.session_state.bor_step == 2:
+                    # สรุปอุปกรณ์
+                    sel_id_b  = st.session_state.get("bor_selected_id")
+                    sel_qty_b = st.session_state.get("bor_selected_qty", 1)
+                    eq_match_b = df_bor_sup[df_bor_sup["id"] == sel_id_b]
+                    if not eq_match_b.empty:
+                        eq_b2 = eq_match_b.iloc[0]
+                        st.markdown(
+                            f'<div class="item-card" style="border-left:4px solid #D62828;">'
+                            f'🔌 <b>{eq_b2["code"]}</b> — {eq_b2["name"]} '
+                            f'<span class="qty-badge" style="background:#fde8e8;color:#D62828;">'
+                            f'x{sel_qty_b} {eq_b2.get("unit","ชิ้น")}</span> '
+                            f'<span style="font-size:0.8rem;color:#888;">(ต้องคืน)</span>'
+                            f'</div>', unsafe_allow_html=True)
+
+                    st.markdown('<div class="section-header">👤 ข้อมูลผู้ยืม</div>', unsafe_allow_html=True)
+                    bor_type  = st.radio("ประเภท", ["นักศึกษา","บุคลากร/อาจารย์"],
+                                         horizontal=True, key="bor_type")
+                    bor_name  = st.text_input("ชื่อ-นามสกุล *", key="bor_name")
+                    bor_phone = st.text_input("เบอร์โทรศัพท์ *", key="bor_phone")
+                    bor_sid   = st.text_input("รหัสนักศึกษา / รหัสพนักงาน (ถ้ามี)", key="bor_sid")
+                    bor_dept  = st.text_input("ภาควิชา / หน่วยงาน (ถ้ามี)", key="bor_dept")
+
+                    st.markdown('<div class="section-header">📅 วันที่</div>', unsafe_allow_html=True)
+                    col_d1, col_d2 = st.columns(2)
+                    borrow_date = col_d1.date_input("วันที่เบิก *", value=date.today(), key="bor_date")
+                    due_date    = col_d2.date_input("กำหนดคืน *", value=date.today(), key="bor_due")
+                    cond_out    = st.selectbox("สภาพขณะเบิก",
+                                               ["ปกติ","มีรอยขีดข่วน","ชำรุดบางส่วน"], key="bor_cond")
+                    note_b = st.text_input("หมายเหตุ (ถ้ามี)", key="bor_note")
+
+                    col_back2, col_sub2 = st.columns([1, 2])
+                    with col_back2:
+                        if st.button("← ย้อนกลับ", use_container_width=True, key="bor_back"):
+                            st.session_state.bor_step = 1
+                            st.rerun()
+                    with col_sub2:
+                        if st.button("✅ ยืนยันการยืม", type="primary",
+                                     use_container_width=True, key="bor_submit"):
+                            if not bor_name.strip():
+                                st.error("❌ กรุณากรอกชื่อ")
+                            elif not bor_phone.strip():
+                                st.error("❌ กรุณากรอกเบอร์โทรศัพท์")
+                            elif borrow_date > date.today():
+                                st.error("❌ ไม่อนุญาตให้เบิกล่วงหน้า")
+                            elif due_date < borrow_date:
+                                st.error("❌ วันกำหนดคืนต้องไม่ก่อนวันที่เบิก")
+                            elif sel_id_b is None:
+                                st.error("❌ กรุณาเลือกอุปกรณ์ใหม่")
+                            elif check_duplicate_submit(sel_id_b, bor_name) == "submitting":
+                                st.warning("⏳ กำลังบันทึก กรุณารอสักครู่...")
+                            elif check_duplicate_submit(sel_id_b, bor_name) == "duplicate":
+                                st.session_state["bor_pending_confirm"] = True
                             else:
-                                borr = insert_row("office_borrowers", {
-                                    "name": bor_name.strip(), "type": bor_type,
-                                    "student_id": bor_sid or None, "department": bor_dept or None,
-                                    "phone": bor_phone.strip()
-                                })
-                                borr_id = int(borr["id"])
+                                st.session_state.pop("bor_pending_confirm", None)
+                                eq_final_b = df_bor_sup[df_bor_sup["id"] == sel_id_b].iloc[0]
+                                try:
+                                    register_submit(sel_id_b, bor_name)   # ล็อกก่อน insert
+                                    existing_borr = query_table("office_borrowers", select="id",
+                                                                filters=[("phone","eq",bor_phone.strip())])
+                                    if not existing_borr.empty:
+                                        borr_id = int(existing_borr.iloc[0]["id"])
+                                        update_rows("office_borrowers", {
+                                            "name": bor_name.strip(), "type": bor_type,
+                                            "student_id": bor_sid or None, "department": bor_dept or None
+                                        }, "id", borr_id)
+                                    else:
+                                        borr = insert_row("office_borrowers", {
+                                            "name": bor_name.strip(), "type": bor_type,
+                                            "student_id": bor_sid or None, "department": bor_dept or None,
+                                            "phone": bor_phone.strip()
+                                        })
+                                        borr_id = int(borr["id"])
 
-                            insert_row("borrow_transactions", {
-                                "supply_id": int(opts_b[sel_b]),
-                                "borrower_id": borr_id,
-                                "qty": qty_b,
-                                "borrow_date": str(borrow_date),
-                                "due_date": str(due_date),
-                                "condition_out": cond_out,
-                                "note": note_b or None,
-                                "status": "ยืมอยู่"
-                            })
-                            new_avail_b = int(eq_b["available_qty"]) - qty_b
-                            update_rows("supplies", {"available_qty": new_avail_b}, "id", int(opts_b[sel_b]))
-                            if new_avail_b <= 0:
-                                update_rows("supplies", {"status": "ยืมออก"}, "id", int(opts_b[sel_b]))
-                            load_sidebar_stats.clear()
+                                    insert_row("borrow_transactions", {
+                                        "supply_id": sel_id_b,
+                                        "borrower_id": borr_id,
+                                        "qty": sel_qty_b,
+                                        "borrow_date": str(borrow_date),
+                                        "due_date": str(due_date),
+                                        "condition_out": cond_out,
+                                        "note": note_b or None,
+                                        "status": "ยืมอยู่"
+                                    })
+                                    new_avail_b = int(eq_final_b["available_qty"]) - sel_qty_b
+                                    update_rows("supplies", {"available_qty": new_avail_b}, "id", sel_id_b)
+                                    if new_avail_b <= 0:
+                                        update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
+                                    clear_all_cache()
+                                    finish_submit()
+                                    st.session_state.bor_step = 1
+                                    st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ!\n\n"
+                                        f"👤 **{bor_name}** ({bor_type})"
+                                        + (f" — {bor_dept}" if bor_dept else "")
+                                        + (f" | 📞 {bor_phone}" if bor_phone else "")
+                                        + f"\n🔌 {eq_final_b['name']} จำนวน **{sel_qty_b} {eq_final_b.get('unit','ชิ้น')}**"
+                                        + f"\n📅 เบิก: {borrow_date} | กำหนดคืน: **{due_date}**"
+                                    )
+                                    for k in ["bor_selected_id","bor_selected_qty"]:
+                                        st.session_state.pop(k, None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
-                            st.success(
-                                f"✅ บันทึกสำเร็จ!\n\n"
-                                f"👤 **{bor_name}** ยืม {eq_b['name']} x{qty_b}\n"
-                                f"📅 กำหนดคืน: {due_date}"
-                            )
-                            st.balloons()
-                        except Exception as e:
-                            st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                    # ── Duplicate Warning Dialog (borrow) ──
+                    if st.session_state.get("bor_pending_confirm"):
+                        eq_dup_b = df_bor_sup[df_bor_sup["id"] == sel_id_b] if sel_id_b else pd.DataFrame()
+                        eq_name_dup_b = eq_dup_b.iloc[0]["name"] if not eq_dup_b.empty else "?"
+                        st.warning(
+                            f"⚠️ **กดซ้ำภายใน {DUPLICATE_GUARD_SECONDS} วินาที!**\n\n"
+                            f"รายการล่าสุดอาจถูกบันทึกไปแล้ว\n"
+                            f"👤 **{bor_name}** — **{eq_name_dup_b}** x{sel_qty_b}\n\n"
+                            f"ต้องการยืม **2 รอบ** จริงหรือไม่?"
+                        )
+                        cb_yes, cb_no = st.columns(2)
+                        with cb_yes:
+                            if st.button("✅ ใช่ ยืม 2 รอบ", type="primary",
+                                         use_container_width=True, key="bor_confirm_yes"):
+                                clear_submit_guard()
+                                st.session_state.pop("bor_pending_confirm", None)
+                                eq_fb2 = df_bor_sup[df_bor_sup["id"] == sel_id_b].iloc[0]
+                                try:
+                                    register_submit(sel_id_b, bor_name)   # ล็อกก่อน insert
+                                    existing_borr2 = query_table("office_borrowers", select="id",
+                                                                 filters=[("phone","eq",bor_phone.strip())])
+                                    borr_id2 = (int(existing_borr2.iloc[0]["id"]) if not existing_borr2.empty
+                                                else int(insert_row("office_borrowers", {
+                                                    "name": bor_name.strip(), "type": bor_type,
+                                                    "student_id": bor_sid or None, "department": bor_dept or None,
+                                                    "phone": bor_phone.strip()
+                                                })["id"]))
+                                    insert_row("borrow_transactions", {
+                                        "supply_id": sel_id_b, "borrower_id": borr_id2,
+                                        "qty": sel_qty_b, "borrow_date": str(borrow_date),
+                                        "due_date": str(due_date), "condition_out": cond_out,
+                                        "note": note_b or None, "status": "ยืมอยู่"
+                                    })
+                                    new_avail_b2 = int(eq_fb2["available_qty"]) - sel_qty_b
+                                    update_rows("supplies", {"available_qty": new_avail_b2}, "id", sel_id_b)
+                                    if new_avail_b2 <= 0:
+                                        update_rows("supplies", {"status": "ยืมออก"}, "id", sel_id_b)
+                                    clear_all_cache()
+                                    finish_submit()
+                                    st.session_state.bor_step = 1
+                                    st.session_state["show_balloons"] = True
+                                    st.session_state["success_msg"] = (
+                                        f"✅ บันทึกสำเร็จ! (รอบที่ 2)\n\n"
+                                        f"👤 **{bor_name}** ({bor_type})"
+                                        + f"\n🔌 {eq_fb2['name']} จำนวน **{sel_qty_b} {eq_fb2.get('unit','ชิ้น')}**"
+                                        + f"\n📅 เบิก: {borrow_date} | กำหนดคืน: **{due_date}**"
+                                    )
+                                    for k in ["bor_selected_id","bor_selected_qty"]:
+                                        st.session_state.pop(k, None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+                        with cb_no:
+                            if st.button("❌ ยกเลิก ไม่ยืมซ้ำ", use_container_width=True,
+                                         key="bor_confirm_no"):
+                                st.session_state.pop("bor_pending_confirm", None)
+                                st.info("ℹ️ ยกเลิกแล้ว รายการไม่ถูกบันทึกซ้ำ")
+                                st.rerun()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE: RETURN (คืนอุปกรณ์)
 # ═════════════════════════════════════════════════════════════════════════════
 def page_return():
     st.markdown('<div class="page-title">↩️ คืนอุปกรณ์</div>', unsafe_allow_html=True)
+
+    # ── Return Success Screen เต็มหน้าจอ ──
+    if st.session_state.get("show_return_success"):
+        info = st.session_state.pop("show_return_success")
+        st.markdown(f"""
+        <div style="
+            min-height:78vh; display:flex; flex-direction:column;
+            align-items:center; justify-content:center;
+            text-align:center; padding:24px 20px;
+        ">
+            <div style="font-size:5rem; margin-bottom:12px;
+                        animation: pop 0.4s ease;">📬</div>
+            <div style="font-size:1.6rem; font-weight:800; color:#1a5276;
+                        margin-bottom:8px;">แจ้งคืนสำเร็จ!</div>
+            <div style="font-size:0.95rem; color:#52796F; margin-bottom:16px;">
+                รอ Admin ตรวจสอบและยืนยันรับคืน
+            </div>
+            <div style="
+                background:#eaf4fb; border:2px solid #aed6f1;
+                border-radius:16px; padding:20px 24px;
+                max-width:420px; width:100%;
+                text-align:left; color:#1a5276;
+            ">
+                <div style="margin:6px 0;font-size:1.05rem;">🔌 <b>{info['sup_name']}</b> ({info['qty']} {info['unit']})</div>
+                <div style="margin:6px 0;font-size:1.05rem;">👤 {info['ret_name']}</div>
+                <div style="margin:6px 0;font-size:1.05rem;">📅 วันที่คืน: {info['ret_date']}</div>
+                <div style="margin:6px 0;font-size:1.05rem;">🔍 สภาพ: {info['cond_in']}</div>
+            </div>
+        </div>
+        <style>
+        @keyframes pop {{
+            0%   {{ transform: scale(0.5); opacity:0; }}
+            70%  {{ transform: scale(1.2); }}
+            100% {{ transform: scale(1);   opacity:1; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            if st.button("↩️ คืนอุปกรณ์อีกชิ้น", type="primary",
+                         use_container_width=True, key="back_to_return"):
+                st.rerun()
+            if st.button("🏠 กลับหน้าหลัก", use_container_width=True,
+                         key="return_to_home"):
+                st.session_state.page = "หน้าหลัก"
+                st.rerun()
+        return   # หยุด render ส่วนที่เหลือ
 
     df_pending = load_pending_borrows()
     n_pending = len(df_pending)
@@ -951,11 +1734,22 @@ def page_return():
     n_cancel = len(df_cancel_list)
     tab1, tab2, tab3 = st.tabs(["📬 แจ้งคืน", f"🔍 รอตรวจสอบ ({n_pending})", f"🚫 ยกเลิกรายการ ({n_cancel})"])
 
+    # ปุ่ม refresh สำหรับ Admin
+    if is_admin():
+        if st.button("🔄 รีเฟรชข้อมูล", key="return_refresh", use_container_width=False):
+            clear_all_cache()
+            st.rerun()
+        st.caption(f"ล่าสุด: {datetime.now(_TZ_BKK).strftime('%H:%M:%S')}")
+
     with tab1:
         st.markdown(
-            '<div class="info-box">📬 ผู้ยืมกรอกข้อมูลแจ้งคืน → Admin ตรวจสอบและยืนยัน</div>',
+            '<div class="info-box">📬 ค้นหารายการที่ยืมอยู่ → กรอกข้อมูล → กด แจ้งคืน<br>'
+            '<b>Admin จะตรวจสอบและยืนยันรับคืน</b></div>',
             unsafe_allow_html=True)
-        search_r = st.text_input("🔍 ค้นหาชื่อ / รหัสอุปกรณ์", key="ret_search")
+
+        search_r = st.text_input("🔍 พิมพ์ชื่อผู้ยืม หรือ รหัสอุปกรณ์",
+                                  placeholder="เช่น สมชาย / PRJ-001",
+                                  key="ret_search")
 
         df_active = load_active_borrows()
         if search_r and not df_active.empty:
@@ -966,18 +1760,25 @@ def page_return():
             df_active = df_active[mask]
 
         if df_active.empty:
-            st.info("✅ ไม่มีรายการยืม" if not search_r else "ไม่พบรายการที่ค้นหา")
+            if search_r:
+                st.info("ไม่พบรายการที่ค้นหา — ลองพิมพ์ชื่อ หรือรหัสอุปกรณ์ใหม่")
+            else:
+                st.info("✅ ไม่มีรายการยืมในขณะนี้")
         else:
-            st.caption(f"พบ {len(df_active)} รายการ")
+            st.caption(f"พบ {len(df_active)} รายการ — เลือกรายการที่ต้องการแจ้งคืน")
             for _, r in df_active.iterrows():
                 od = overdue_days(r["due_date"])
-                lbl = f"TX#{r['id']} | {r['sup_code']} {r['sup_name']} | {r['br_name']}"
-                if od > 0:
-                    lbl += f" ⚠️ เกิน {od} วัน"
-                with st.expander(lbl):
+                border_color = "#D62828" if od > 0 else "#52796F"
+                # Card header — กดเพื่อขยาย
+                lbl_icon = "🔴" if od > 0 else "🟢"
+                lbl = (f"{lbl_icon} **{r['sup_code']} — {r['sup_name']}** "
+                       f"({r['qty']} ชิ้น) | 👤 {r['br_name']}"
+                       + (f" ⚠️ เกิน {od} วัน" if od > 0 else ""))
+                with st.expander(lbl, expanded=(od > 0)):
+                    # Info บน 2 col
                     c1, c2 = st.columns([1, 2])
                     with c1:
-                        show_image(r.get("sup_img"), size="preview")
+                        show_image(r.get("sup_img"), size="thumb")
                     with c2:
                         st.markdown(
                             f"📦 **{r['sup_code']}** — {r['sup_name']} ({r['qty']} ชิ้น)<br>"
@@ -988,14 +1789,17 @@ def page_return():
                         if r.get("br_phone"):
                             st.caption(f"📞 {r['br_phone']}")
 
-                    ret_date = st.date_input("วันที่นำมาคืน", value=date.today(), key=f"rd_{r['id']}")
-                    cond_in  = st.selectbox("สภาพอุปกรณ์",
-                                            ["ปกติ","มีรอยขีดข่วน","ชำรุด","สูญหาย"],
-                                            key=f"ci_{r['id']}")
+                    st.markdown("**กรอกข้อมูลการคืน:**")
+                    col_rd, col_ci = st.columns(2)
+                    ret_date = col_rd.date_input("วันที่นำมาคืน",
+                                                  value=date.today(), key=f"rd_{r['id']}")
+                    cond_in  = col_ci.selectbox("สภาพอุปกรณ์",
+                                                 ["ปกติ","มีรอยขีดข่วน","ชำรุด","สูญหาย"],
+                                                 key=f"ci_{r['id']}")
                     ret_name = st.text_input("ชื่อผู้นำมาคืน *",
                                              value=str(r.get("br_name","")) if pd.notna(r.get("br_name","")) else "",
                                              key=f"rname_{r['id']}")
-                    note_r = st.text_input("หมายเหตุ", key=f"rn_{r['id']}")
+                    note_r = st.text_input("หมายเหตุ (ถ้ามี)", key=f"rn_{r['id']}")
 
                     if st.button("📬 แจ้งคืน", key=f"notify_{r['id']}",
                                  type="primary", use_container_width=True):
@@ -1005,7 +1809,6 @@ def page_return():
                         elif ret_date < borrow_dt:
                             st.error(f"❌ วันที่คืนต้องไม่ก่อนวันที่เบิก ({r['borrow_date']})")
                         else:
-                            # รวม note ผู้ยืม (เดิม) + note ผู้คืน (ใหม่) ไม่ลบของเดิม
                             existing_note = str(r.get("note", "") or "").strip()
                             new_note_r = note_r.strip() if note_r and note_r.strip() else ""
                             if new_note_r:
@@ -1019,15 +1822,94 @@ def page_return():
                                 "note": combined_note,
                                 "status": "รอตรวจสอบ"
                             }, "id", r["id"])
-                            st.success("📬 แจ้งคืนแล้ว! รอ Admin ตรวจสอบ")
-                            load_sidebar_stats.clear()
+                            clear_all_cache()
+                            st.session_state["show_return_success"] = {
+                                "sup_name": r["sup_name"],
+                                "qty": r["qty"],
+                                "unit": "ชิ้น",
+                                "ret_name": ret_name.strip(),
+                                "ret_date": str(ret_date),
+                                "cond_in": cond_in,
+                            }
                             st.rerun()
 
     with tab2:
         if df_pending.empty:
             st.info("✅ ไม่มีรายการรอตรวจสอบ")
         else:
+            # sort ใหม่หลัง enrich
+            if "id" in df_pending.columns:
+                df_pending = df_pending.sort_values("id", ascending=False)
+
             st.warning(f"🔍 {len(df_pending)} รายการรอ Admin ตรวจสอบ")
+
+            # ── ปุ่ม ตรวจสอบทั้งหมด (Admin only) ──────────────────────────
+            if is_admin():
+                st.markdown(
+                    '<div class="info-box" style="border-color:#2D6A4F;">'
+                    '💡 <b>ตรวจสอบทั้งหมด</b> — ยืนยันรับคืนทุกรายการด้วยสภาพ <b>"ปกติ"</b> '
+                    'ใช้เมื่ออุปกรณ์ทุกชิ้นสภาพดี ไม่มีชำรุดหรือสูญหาย'
+                    '</div>', unsafe_allow_html=True)
+
+                col_bulk, col_info = st.columns([2, 3])
+                with col_bulk:
+                    if st.button(f"✅ ยืนยันรับคืนทั้งหมด ({len(df_pending)} รายการ)",
+                                 type="primary", use_container_width=True,
+                                 key="bulk_confirm_btn"):
+                        st.session_state["bulk_confirm_pending"] = True
+
+                with col_info:
+                    st.caption("⚠️ ระบบจะตั้งสภาพ 'ปกติ' ให้ทุกรายการ\nหากมีชำรุด/สูญหาย ให้กดรายการนั้นแยกก่อน")
+
+                # Confirmation dialog
+                if st.session_state.get("bulk_confirm_pending"):
+                    st.error(
+                        f"⚠️ **ยืนยันรับคืนทั้งหมด {len(df_pending)} รายการ?**\n\n"
+                        f"ระบบจะตั้งสภาพ **'ปกติ'** และเปลี่ยนสถานะเป็น **'คืนแล้ว'** ทุกรายการ\n"
+                        f"ไม่สามารถย้อนกลับได้ — กรุณาตรวจสอบรายการด้านล่างก่อนยืนยัน"
+                    )
+                    cb_yes, cb_no = st.columns(2)
+                    with cb_yes:
+                        if st.button("✅ ยืนยัน ดำเนินการเลย", type="primary",
+                                     use_container_width=True, key="bulk_yes"):
+                            success_count = 0
+                            error_count   = 0
+                            for _, r in df_pending.iterrows():
+                                try:
+                                    update_rows("borrow_transactions", {
+                                        "condition_in": "ปกติ",
+                                        "status": "คืนแล้ว"
+                                    }, "id", r["id"])
+                                    # คืน available_qty
+                                    cur_eq = query_table("supplies",
+                                                         select="available_qty,total_qty",
+                                                         filters=[("id","eq",r["supply_id"])])
+                                    if not cur_eq.empty:
+                                        cur_a = int(cur_eq.iloc[0]["available_qty"])
+                                        qty_ret = int(r["qty"])
+                                        new_avail = cur_a + qty_ret
+                                        new_stat  = "พร้อมใช้" if new_avail > 0 else "หมด"
+                                        update_rows("supplies", {
+                                            "available_qty": new_avail,
+                                            "status": new_stat
+                                        }, "id", r["supply_id"])
+                                    success_count += 1
+                                except Exception:
+                                    error_count += 1
+                            clear_all_cache()
+                            st.session_state.pop("bulk_confirm_pending", None)
+                            if error_count == 0:
+                                st.success(f"✅ ยืนยันรับคืนครบ {success_count} รายการแล้ว!")
+                            else:
+                                st.warning(f"⚠️ สำเร็จ {success_count} / ล้มเหลว {error_count} รายการ")
+                            st.rerun()
+                    with cb_no:
+                        if st.button("❌ ยกเลิก", use_container_width=True, key="bulk_no"):
+                            st.session_state.pop("bulk_confirm_pending", None)
+                            st.rerun()
+
+                st.divider()
+
             for _, r in df_pending.iterrows():
                 od = overdue_days(r["due_date"])
                 lbl = f"TX#{r['id']} | {r['sup_code']} {r['sup_name']} | {r['br_name']}"
@@ -1089,7 +1971,7 @@ def page_return():
                                         "available_qty": cur_a + delta,
                                         "status": new_stat
                                     }, "id", r["supply_id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.success(f"✅ รับคืนแล้ว สภาพ: {admin_cond}")
                                 st.rerun()
                         with cc2:
@@ -1097,7 +1979,7 @@ def page_return():
                                 update_rows("borrow_transactions", {
                                     "status": "ยืมอยู่", "return_date": None, "condition_in": None
                                 }, "id", r["id"])
-                                load_sidebar_stats.clear()
+                                clear_all_cache()
                                 st.warning("↩️ ส่งกลับเป็น 'ยืมอยู่' แล้ว")
                                 st.rerun()
                     else:
@@ -1171,7 +2053,7 @@ def page_return():
                                             "available_qty": new_a,
                                             "status": new_stat
                                         }, "id", r["supply_id"])
-                                    load_sidebar_stats.clear()
+                                    clear_all_cache()
                                     st.success(f"🚫 ยกเลิก TX#{r['id']} เรียบร้อยแล้ว | เหตุผล: {cancel_reason.strip()}")
                                     st.rerun()
                                 except Exception as e:
@@ -1436,7 +2318,7 @@ def page_settings():
                                 imported += 1
                         except Exception:
                             pass
-                    load_sidebar_stats.clear()
+                    clear_all_cache()
                     st.success(f"✅ Import {imported} รายการสำเร็จ!")
                     st.rerun()
             except Exception as e:
@@ -1497,7 +2379,7 @@ def page_settings():
                             delete_rows("office_borrowers", delete_all=True)
                             delete_rows("supplies", delete_all=True)
                             st.success("✅ ล้างทุกอย่างเรียบร้อย")
-                        load_sidebar_stats.clear()
+                        clear_all_cache()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ {e}")
@@ -1519,14 +2401,26 @@ def footer():
 # MAIN
 # ═════════════════════════════════════════════════════════════════════════════
 def main():
-    nav()
-    page = st.session_state.get("page", "Dashboard")
-    if   page == "Dashboard":  page_dashboard()
+    nav()  # sidebar + header
+
+    page = st.session_state.get("page", "หน้าหลัก")
+
+    # Guard: ผู้ใช้ทั่วไปเข้า Admin-only pages ไม่ได้
+    ADMIN_ONLY = {"Dashboard", "คลังอุปกรณ์", "รายงาน", "ตั้งค่า"}
+    if page in ADMIN_ONLY and not is_admin():
+        st.warning("🔒 หน้านี้สำหรับ Admin เท่านั้น กรุณา Login ที่เมนู ☰ มุมซ้ายบน")
+        st.session_state.page = "หน้าหลัก"
+        st.rerun()
+
+    # Route
+    if   page == "หน้าหลัก":    page_home()
+    elif page == "Dashboard":   page_dashboard()
     elif page == "คลังอุปกรณ์": page_inventory()
     elif page == "เบิกอุปกรณ์": page_request()
-    elif page == "คืนอุปกรณ์": page_return()
-    elif page == "รายงาน":     page_report()
-    elif page == "ตั้งค่า":    page_settings()
+    elif page == "คืนอุปกรณ์":  page_return()
+    elif page == "รายงาน":      page_report()
+    elif page == "ตั้งค่า":     page_settings()
+
     footer()
 
 if __name__ == "__main__":
