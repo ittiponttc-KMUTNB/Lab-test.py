@@ -640,10 +640,9 @@ def page_home():
     st.markdown("---")
     st.markdown('<div class="section-header">🚀 ทำรายการ</div>', unsafe_allow_html=True)
 
-    # CSS: ทำให้ปุ่ม Streamlit หน้าตาเป็น card ใหญ่เลย
+    # CSS: card สีสรร — เบิก=เขียว, คืน=น้ำเงิน
     st.markdown("""
     <style>
-    /* target เฉพาะ 2 ปุ่มนี้ผ่าน key */
     div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"],
     div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"] {
         height: 130px !important;
@@ -653,22 +652,30 @@ def page_home():
         white-space: pre-line !important;
         line-height: 1.6 !important;
         padding: 16px 12px !important;
-        border: 2px solid #d8ead2 !important;
-        background: white !important;
-        color: #1b4332 !important;
-        box-shadow: 0 3px 10px rgba(27,67,50,0.08) !important;
+        border: none !important;
+        color: white !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15) !important;
         transition: all 0.18s ease !important;
     }
-    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:hover,
-    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:hover {
-        border-color: #2D6A4F !important;
-        box-shadow: 0 6px 20px rgba(27,67,50,0.18) !important;
-        transform: translateY(-3px) !important;
-        background: #f4fbf7 !important;
-        color: #1b4332 !important;
+    /* ปุ่มที่ 1 — เบิกอุปกรณ์ สีเขียว */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) div.stButton button {
+        background: #2D6A4F !important;
     }
-    div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:active,
-    div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:active {
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) div.stButton button:hover {
+        background: #1b4332 !important;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 6px 20px rgba(27,67,50,0.30) !important;
+    }
+    /* ปุ่มที่ 2 — คืนอุปกรณ์ สีน้ำเงิน */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div.stButton button {
+        background: #1a5276 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div.stButton button:hover {
+        background: #0c2461 !important;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 6px 20px rgba(26,82,118,0.30) !important;
+    }
+    div[data-testid="stHorizontalBlock"] div.stButton button:active {
         transform: scale(0.97) !important;
     }
     </style>
