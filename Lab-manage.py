@@ -68,10 +68,6 @@ html, body, [class*="css"] {
     font-size: 16px;
     background-color: #ffffff;
 }
-/* padding ล่างเพื่อไม่ให้ dropdown โดน footer บัง */
-section[data-testid="stMain"] > div:first-child {
-    padding-bottom: 120px !important;
-}
 [data-testid="collapsedControl"] { display: none; }
 div.stButton > button {
     height: 3rem; font-size: 1rem; border-radius: 10px;
@@ -170,35 +166,22 @@ div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
     border-color: #7d3020 !important; box-shadow: 0 2px 8px rgba(125,48,32,0.30) !important;
 }
 
-/* Quick action buttons — เบิก=เลือดหมู, คืน=น้ำเงิน */
-/* จำกัด scope ด้วย class .home-cards เพื่อไม่กระทบ nav */
-div.home-cards div[data-testid="stHorizontalBlock"] div.stButton button {
+/* Quick action buttons */
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"],
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"] {
     height: 130px !important; border-radius: 14px !important;
     font-size: 1rem !important; font-weight: 700 !important;
     white-space: pre-line !important; line-height: 1.6 !important;
-    padding: 16px 12px !important; border: none !important;
-    color: white !important;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.15) !important;
+    padding: 16px 12px !important; border: 2px solid #e8c4bc !important;
+    background: white !important; color: #5c2018 !important;
+    box-shadow: 0 3px 10px rgba(92,32,24,0.08) !important;
     transition: all 0.18s ease !important;
 }
-div.home-cards div[data-testid="stHorizontalBlock"] > div:nth-child(1) div.stButton button {
-    background: #7d3020 !important;
-}
-div.home-cards div[data-testid="stHorizontalBlock"] > div:nth-child(1) div.stButton button:hover {
-    background: #5c2018 !important;
-    transform: translateY(-3px) !important;
-    box-shadow: 0 6px 20px rgba(92,32,24,0.35) !important;
-}
-div.home-cards div[data-testid="stHorizontalBlock"] > div:nth-child(2) div.stButton button {
-    background: #1a5276 !important;
-}
-div.home-cards div[data-testid="stHorizontalBlock"] > div:nth-child(2) div.stButton button:hover {
-    background: #0c2461 !important;
-    transform: translateY(-3px) !important;
-    box-shadow: 0 6px 20px rgba(26,82,118,0.30) !important;
-}
-div.home-cards div[data-testid="stHorizontalBlock"] div.stButton button:active {
-    transform: scale(0.97) !important;
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="secondary"]:hover,
+div[data-testid="stHorizontalBlock"] div.stButton button[kind="primary"]:hover {
+    border-color: #7d3020 !important; color: #5c2018 !important;
+    box-shadow: 0 6px 20px rgba(92,32,24,0.18) !important;
+    transform: translateY(-3px) !important; background: #fdf2f0 !important;
 }
 
 /* Step wizard */
@@ -657,7 +640,7 @@ def page_home():
 
     st.markdown("---")
     st.markdown('<div class="section-header">🚀 ทำรายการ</div>', unsafe_allow_html=True)
-    st.markdown('<div class="home-cards">', unsafe_allow_html=True)
+
     col_a, col_b = st.columns(2)
     with col_a:
         if st.button("➕\nเบิกอุปกรณ์\nอุปกรณ์ / วัสดุสิ้นเปลือง",
@@ -669,7 +652,6 @@ def page_home():
                      key="home_to_return", use_container_width=True):
             st.session_state.page = "คืน"
             st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if not is_admin():
         st.markdown("""
