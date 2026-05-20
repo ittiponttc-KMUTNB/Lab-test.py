@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import time
+import httpx
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 _TZ_BKK = ZoneInfo("Asia/Bangkok")
@@ -345,6 +346,16 @@ def _sb_retry(func, retries=2, delay=1):
     for attempt in range(retries + 1):
         try:
             return func()
+        except httpx.ConnectError:
+            st.error(
+                "⚠️ **ไม่สามารถเชื่อมต่อฐานข้อมูลได้**\n\n"
+                "Supabase project อาจถูก pause อัตโนมัติ\n\n"
+                "**วิธีแก้ไข:**\n"
+                "1. เข้า [supabase.com/dashboard](https://supabase.com/dashboard)\n"
+                "2. เลือก project แล้วกด **Resume project**\n"
+                "3. รอ 1–2 นาที แล้ว Refresh หน้านี้"
+            )
+            st.stop()
         except Exception as e:
             if attempt == retries:
                 raise e
